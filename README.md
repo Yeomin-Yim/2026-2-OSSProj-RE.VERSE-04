@@ -21,7 +21,7 @@ RE:Cord는 기존 기록을 프로젝트별로 모아 학생의 역할·과정·
 
 ## 🕹️ 주요 기능
 
-![내 프로젝트 UI](./Src/prototype/image/project_ui_image.png)
+![내 프로젝트 UI](./Src/prototype/ref/project_ui_image.png)
 
 > ### 📁 내 프로젝트
 >
