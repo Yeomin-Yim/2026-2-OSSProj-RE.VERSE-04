@@ -1,0 +1,32 @@
+/* 화면 스타일의 기준은 프로토타입에서 그대로 옮긴 styles/prototype.css 다.
+   프로토타입에 없는 화면(로그인, 문장·태그 목록, 연결 목록)에 필요한 것만 아래에 더한다. */
+@import "./styles/prototype.css";
+
+/* 로그인 */
+.login-wrap{min-height:100vh;display:grid;place-items:center;padding:20px}
+.login-card{width:min(380px,100%);padding:28px}
+.login-card .logo{padding:0 0 18px}
+.login-card .btn{width:100%;margin-top:4px}
+.login-error{color:var(--danger);font-size:12px;margin:0 0 10px}
+
+/* 사용자 메뉴 · 처리 중 표시 */
+.btn:disabled{opacity:.6;cursor:default}
+.nav-pending{opacity:.55;transition:opacity .15s}
+
+/* 기록 내용 보기: 문장과 태그 */
+.sent-list{margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.sent-list li{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.55}
+.sent-list .sid{flex:none;font-size:10.5px;color:var(--hint);width:78px;padding-top:2px}
+.tag-chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;margin:2px 4px 0 0;border-radius:6px;background:#EEF2F9;color:#3F5273;font-size:10.5px;font-weight:600}
+.tag-chip.method{background:var(--lav);color:var(--primary-dark)}
+.tag-chip.output{background:#ECFDF3;color:var(--ok)}
+.tag-chip.tool{background:var(--yellow-soft);color:var(--navy)}
+.tag-chip small{margin-left:4px;font-weight:500;opacity:.7}
+.sub-title{margin:20px 0 10px;font-size:13px}
+
+/* 연결 그래프(목록 형태) */
+.rel-row{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.rel-row:last-child{border-bottom:0}
+.rel-row .score{flex:none;width:52px;height:52px;border-radius:50%;background:var(--lav);color:var(--primary);display:grid;place-items:center;font-weight:800;font-size:13px}
+.rel-row.weak .score{background:var(--chip-off);color:#7D8BA3}
+.rel-row b{font-size:13px}

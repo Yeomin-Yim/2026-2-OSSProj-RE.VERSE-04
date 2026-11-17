@@ -12,6 +12,7 @@ Supabase 대시보드 → **SQL Editor**에서 `migrations/` 파일을 **번호 
 | `0002_rls.sql` | 권한과 행 수준 보안. 학생은 자기 데이터만, 기준 데이터는 읽기만 |
 | `0003_storage.sql` | 비공개 버킷 `records` (20MB), 경로 `{owner_id}/{record_id}/{version}/{파일명}` |
 | `0004_tag_dictionary.sql` | 규칙 사전 v0.5 등록 |
+| `0005_drop_project_short_title.sql` | 프로젝트 목록 표시용 `short_title` 컬럼 제거 |
 
 프로젝트를 만들 때 Security 설정은 *Enable Data API* 켜기, *Automatically expose new tables* 끄기, *Enable automatic RLS* 켜기.
 

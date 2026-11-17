@@ -1,0 +1,13 @@
+[mcp_servers.serena]
+command = "uvx"
+args = [
+    "--from",
+    "serena-agent",
+    "serena",
+    "start-mcp-server",
+    "--project-from-cwd",
+    "--context",
+    "claude-code",
+    "--open-web-dashboard",
+    "False",
+]
