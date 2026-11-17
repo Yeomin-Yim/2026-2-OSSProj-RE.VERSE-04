@@ -10,8 +10,8 @@ begin
   if exists (select 1 from public.records where no between 1 and 25) then raise exception '기록 번호 1~25가 이미 쓰이고 있습니다. 시드는 빈 DB에 먼저 넣으세요'; end if;
 
   update public.profiles set name = '김서윤' where id = uid;
-  insert into public.projects (id, owner_id, title, short_title, topic, start_date, end_date, status) values
-    ('aaf98e4c-1b05-579b-acbf-aac5cea58c5e', uid, '우리 동네 다회용컵 순환 프로젝트', '다회용컵 순환', '일회용 컵 줄이기 서비스 기획', '2024-03-04', '2024-06-28', 'done');
+  insert into public.projects (id, owner_id, title, topic, start_date, end_date, status) values
+    ('aaf98e4c-1b05-579b-acbf-aac5cea58c5e', uid, '우리 동네 다회용컵 순환 프로젝트', '일회용 컵 줄이기 서비스 기획', '2024-03-04', '2024-06-28', 'done');
   insert into public.records (id, no, owner_id, project_id, kind, title, recorded_at, is_result, url, current_version)
     overriding system value values
     ('32022af8-cb37-5356-ad0c-cf9a46f164c1', 1, uid, 'aaf98e4c-1b05-579b-acbf-aac5cea58c5e', 'meeting', '3차 회의록 · 설문 및 인터뷰 설계 검토', '2024-03-22', false, null, 1);
@@ -49,8 +49,8 @@ begin
     (uid, 'aaf98e4c-1b05-579b-acbf-aac5cea58c5e', 'f43c456d-c540-56db-a7fd-4a113614451f', $j$[{"code":"M12","matched":"서비스 기획","sid":"N5·V1·S1"},{"code":"O02","matched":"기획안","sid":"N5·V1·S1"}]$j$::jsonb, 'rule', 'v0.5');
   insert into public.experiences (owner_id, project_id, fields, source) values
     (uid, 'aaf98e4c-1b05-579b-acbf-aac5cea58c5e', $j${"role":{"text":"설문 설계 · 사용자 조사 · 데이터 정리 · 서비스 기획","sids":[]},"activity":{"text":"설문·인터뷰 / 서비스 기획","sids":[]},"problem":{"text":"학교 주변과 동네 상권에서 쓰이는 일회용 컵을 줄일 실질적인 방법이 필요했습니다.","sids":[]},"process":{"text":"소비자 설문 15문항과 점주 인터뷰 10문항을 설계해 카페 3곳을 방문했고, 120명 응답을 교차 분석했습니다.","sids":[]},"result":{"text":"거점형 공동 수거·세척 서비스 기획안과 사용자 여정 지도를 완성했습니다.","sids":[]},"reflection":{"text":"실현 가능성(비용)을 정량화하지 못한 한계를 확인했습니다.","sids":[]}}$j$::jsonb, 'student');
-  insert into public.projects (id, owner_id, title, short_title, topic, start_date, end_date, status) values
-    ('594a5db9-9b19-51a3-ad1d-eac96992090d', uid, '청소년 야간 귀가 안전지도', '야간 귀가 안전지도', '체감형 안전지도 · 앱 화면 설계', '2024-09-02', '2024-12-20', 'done');
+  insert into public.projects (id, owner_id, title, topic, start_date, end_date, status) values
+    ('594a5db9-9b19-51a3-ad1d-eac96992090d', uid, '청소년 야간 귀가 안전지도', '체감형 안전지도 · 앱 화면 설계', '2024-09-02', '2024-12-20', 'done');
   insert into public.records (id, no, owner_id, project_id, kind, title, recorded_at, is_result, url, current_version)
     overriding system value values
     ('8f79ae40-fc84-5926-a9c2-6c1227c4dc42', 6, uid, '594a5db9-9b19-51a3-ad1d-eac96992090d', 'meeting', '2차 회의록 · 현장조사 구역 분할 및 기준 수립', '2024-09-25', false, null, 1);
@@ -88,8 +88,8 @@ begin
     (uid, '594a5db9-9b19-51a3-ad1d-eac96992090d', '57a53a6f-1d03-55f8-ae04-18f01e0b2ce8', $j$[{"code":"D05","matched":"안전지도","sid":"N10·V1·S1"},{"code":"M10","matched":"안전지도","sid":"N10·V1·S1"},{"code":"O03","matched":"시안","sid":"N10·V1·S1"},{"code":"O04","matched":"안전지도","sid":"N10·V1·S1"},{"code":"O06","matched":"프로토타입","sid":"N10·V1·S1"},{"code":"D05","matched":"cctv","sid":"N10·V1·S2"},{"code":"D02","matched":"주민","sid":"N10·V1·S3"}]$j$::jsonb, 'rule', 'v0.5');
   insert into public.experiences (owner_id, project_id, fields, source) values
     (uid, '594a5db9-9b19-51a3-ad1d-eac96992090d', $j${"role":{"text":"현장조사 · 위치 데이터 정리 · 지도 시각화 · 서비스 화면 설계","sids":[]},"activity":{"text":"야간 현장조사 / 지도 시각화 / 앱 UI 설계","sids":[]},"problem":{"text":"야간 자율학습·학원 하원 후 귀가하는 청소년의 불안을 실제 생활 반경의 위험·안전 요소로 풀고 싶었습니다.","sids":[]},"process":{"text":"귀가 동선 3곳을 밤에 직접 걸으며 요소 45건의 좌표를 수집·구조화하고, My Maps로 시각화한 뒤 Figma로 앱 화면 8장을 설계했습니다.","sids":[]},"result":{"text":"지역 맞춤형 체감 안전지도 프로토타입과 제보 기능이 있는 앱 와이어프레임을 완성했습니다.","sids":[]},"reflection":{"text":"시설의 수만으로 안전을 단정할 수 없어 체감 안전도 설문과의 교차 분석이 필요함을 배웠습니다.","sids":[]}}$j$::jsonb, 'student');
-  insert into public.projects (id, owner_id, title, short_title, topic, start_date, end_date, status) values
-    ('467e9afb-fbfc-52e4-a5c9-ddd440e1d780', uid, '학교 급식 잔반 줄이기 데이터 프로젝트', '급식 잔반 데이터', 'Python 데이터 분석 · 식단 개선안', '2025-03-03', '2025-07-18', 'done');
+  insert into public.projects (id, owner_id, title, topic, start_date, end_date, status) values
+    ('467e9afb-fbfc-52e4-a5c9-ddd440e1d780', uid, '학교 급식 잔반 줄이기 데이터 프로젝트', 'Python 데이터 분석 · 식단 개선안', '2025-03-03', '2025-07-18', 'done');
   insert into public.records (id, no, owner_id, project_id, kind, title, recorded_at, is_result, url, current_version)
     overriding system value values
     ('eef558ec-53ae-5b43-aaaf-2d1b8a9c6614', 11, uid, '467e9afb-fbfc-52e4-a5c9-ddd440e1d780', 'meeting', '2차 회의록 · 수집 변수 확정', '2025-03-28', false, null, 1);
@@ -127,8 +127,8 @@ begin
     (uid, '467e9afb-fbfc-52e4-a5c9-ddd440e1d780', '4ad4ce67-b085-545a-ad0f-858b7e71622a', $j$[{"code":"D03","matched":"잔반","sid":"N15·V1·S1"},{"code":"D17","matched":"잔반","sid":"N15·V1·S1"},{"code":"O01","matched":"리포트 완성","sid":"N15·V1·S1"},{"code":"O02","matched":"개선안","sid":"N15·V1·S1"}]$j$::jsonb, 'rule', 'v0.5');
   insert into public.experiences (owner_id, project_id, fields, source) values
     (uid, '467e9afb-fbfc-52e4-a5c9-ddd440e1d780', $j${"role":{"text":"데이터 수집 설계 · Python 분석 · 시각화 · 개선안 기획","sids":[]},"activity":{"text":"데이터 수집 / Python 분석 / 리포트","sids":[]},"problem":{"text":"매일 버려지는 급식 잔반을 캠페인이 아닌 데이터로 설명하고, 어떤 식단에서 잔반이 느는지 패턴을 찾고 싶었습니다.","sids":[]},"process":{"text":"영양교사와 수집 파이프라인을 설계해 4주치 데이터를 확보하고, pandas로 정제한 뒤 반찬 종류·조리 방식별 상관관계를 matplotlib·seaborn으로 시각화했습니다.","sids":[]},"result":{"text":"\"맑은 국이 나오는 날 잔반 15% 증가\" 등 인사이트와 배식량 자율화 개선안을 리포트로 영양교사에게 전달했습니다.","sids":[]},"reflection":{"text":"4주 추정치만으로는 계절 요인을 반영할 수 없어 통계적 일반화에 한계가 있음을 명시했습니다.","sids":[]}}$j$::jsonb, 'student');
-  insert into public.projects (id, owner_id, title, short_title, topic, start_date, end_date, status) values
-    ('51f4ea94-f0d8-596d-a60e-619b0e942917', uid, '청소년을 위한 지역 활동 탐색 서비스', '지역 활동 탐색', '정보 구조 설계 · 문장 임베딩 추천 실험', '2025-09-01', '2026-01-30', 'done');
+  insert into public.projects (id, owner_id, title, topic, start_date, end_date, status) values
+    ('51f4ea94-f0d8-596d-a60e-619b0e942917', uid, '청소년을 위한 지역 활동 탐색 서비스', '정보 구조 설계 · 문장 임베딩 추천 실험', '2025-09-01', '2026-01-30', 'done');
   insert into public.records (id, no, owner_id, project_id, kind, title, recorded_at, is_result, url, current_version)
     overriding system value values
     ('4166cebb-65b8-5e15-aabd-1da45bcc9aba', 16, uid, '51f4ea94-f0d8-596d-a60e-619b0e942917', 'meeting', '4차 회의록 · 인터뷰 분석 및 페르소나 설정', '2025-10-12', false, null, 1);
@@ -166,8 +166,8 @@ begin
     (uid, '51f4ea94-f0d8-596d-a60e-619b0e942917', '1ef6b230-8fc0-5bba-a52d-03889ca01a85', $j$[{"code":"M05","matched":"실험","sid":"N20·V1·S1"},{"code":"M18","matched":"임베딩","sid":"N20·V1·S1"}]$j$::jsonb, 'rule', 'v0.5');
   insert into public.experiences (owner_id, project_id, fields, source) values
     (uid, '51f4ea94-f0d8-596d-a60e-619b0e942917', $j${"role":{"text":"사용자 인터뷰 · 정보 구조 설계 · Python 구현 · 추천 알고리즘 실험","sids":[]},"activity":{"text":"인터뷰 / 정보 구조 설계 / 임베딩 실험","sids":[]},"problem":{"text":"청소년 활동 정보가 기관별 사이트에 흩어져 있어 접근성이 떨어졌고, 관심사에 맞는 프로그램을 찾기 어려웠습니다.","sids":[]},"process":{"text":"학생 18명을 인터뷰해 페르소나를 정의하고 프로그램 80개의 메타데이터 구조를 설계했으며, 키워드 검색의 한계를 확인한 뒤 Sentence-BERT 임베딩으로 유사도 추천을 실험했습니다.","sids":[]},"result":{"text":"의미 기반 검색이 키워드 검색보다 맥락에 맞는 결과를 내는 것을 A/B 비교 보고서로 입증했습니다.","sids":[]},"reflection":{"text":"정보 자동 갱신 파이프라인은 구현하지 못했다는 기술적 한계를 인식했습니다.","sids":[]}}$j$::jsonb, 'student');
-  insert into public.projects (id, owner_id, title, short_title, topic, start_date, end_date, status) values
-    ('3f28d2b0-fd5c-5ff1-a748-36c375f88c56', uid, '학생 경험을 연결하는 프로젝트 팀원 매칭 플랫폼', '팀원 매칭 플랫폼', '경험 데이터 모델링 · 역할 보완성 추천', '2026-03-02', '2026-09-25', 'done');
+  insert into public.projects (id, owner_id, title, topic, start_date, end_date, status) values
+    ('3f28d2b0-fd5c-5ff1-a748-36c375f88c56', uid, '학생 경험을 연결하는 프로젝트 팀원 매칭 플랫폼', '경험 데이터 모델링 · 역할 보완성 추천', '2026-03-02', '2026-09-25', 'done');
   insert into public.records (id, no, owner_id, project_id, kind, title, recorded_at, is_result, url, current_version)
     overriding system value values
     ('ab0068b2-8cf1-5ae0-a116-dd3a1c8fbeb2', 21, uid, '3f28d2b0-fd5c-5ff1-a748-36c375f88c56', 'meeting', '3차 회의록 · 경험 데이터 속성 정의', '2026-04-05', false, null, 1);
