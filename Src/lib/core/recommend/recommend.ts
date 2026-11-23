@@ -1,4 +1,4 @@
-import type { Profile, ProjectTags, Recommendation } from "./types.ts";
+import type { Profile, ProjectTags, Recommendation } from "../types.ts";
 
 // 시험값 (발표 p24)
 export const BREADTH = 0.5;

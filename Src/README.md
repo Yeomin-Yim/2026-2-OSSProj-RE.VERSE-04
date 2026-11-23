@@ -41,15 +41,23 @@ Src/
 │     ├─ OverviewTab.tsx       개요 6항목
 │     ├─ RightPanel.tsx        보완 제안 · 기록 확인 · 프로젝트 태그
 │     └─ format.ts             날짜 · 종류 표시 형식
-├─ lib/
+├─ lib/                        백엔드. 기능별 폴더 + 여러 기능이 같이 쓰는 파일은 폴더 밖
 │  ├─ core/                    계산 로직. DB·화면과 무관한 순수 함수 (lib/core/README.md)
-│  ├─ server/                  DB 읽기·쓰기 + 저장 흐름. 서버에서만 실행
-│  │  ├─ auth.ts               로그인 확인 (요청마다 한 번)
-│  │  ├─ dictionary.ts         활성 규칙 사전 읽기
-│  │  ├─ projects.ts           프로젝트 · 기록 · 개요 조회와 저장, 태그 병합
-│  │  ├─ records.ts            기록 저장: 버전 → 문장 → 태그
-│  │  └─ graph.ts              연결선 계산 · 조회
-│  └─ supabase/                Supabase 연결 (서버용 클라이언트, 세션 갱신)
+│  │  ├─ text · sentences · tagger · types   공통: 글 정리, 문장 ID, 규칙 태깅
+│  │  ├─ projects/checks.ts    프로젝트 탭: 기록 확인 7항목, 보완 질문
+│  │  ├─ graph/graph.ts        연결 그래프: 프로젝트 연결 점수
+│  │  ├─ recommend/            학과·직무 추천 점수 (화면은 아직 없음)
+│  │  ├─ gcam-import/gcam.ts   거캠 회고록 가져오기: 칸 나누기, AI 묶음 바로잡기
+│  │  └─ index.ts              위 전부를 내보낸다. 화면에서는 "@/lib/core/index.ts" 하나로 불러 쓴다
+│  ├─ server/                  DB 읽기·쓰기 + 외부 API. 서버에서만 실행
+│  │  ├─ auth.ts               공통: 로그인 확인 (요청마다 한 번)
+│  │  ├─ dictionary.ts         공통: 활성 규칙 사전 읽기
+│  │  ├─ openai.ts             공통: OpenAI 호출 (구조화 출력)
+│  │  ├─ projects/             프로젝트 탭: projects.ts(프로젝트·기록·개요 조회와 저장), records.ts(기록 저장: 버전 → 문장 → 태그)
+│  │  ├─ graph/                연결 그래프: 연결선 계산 · 조회
+│  │  └─ gcam-import/          거캠 회고록 가져오기: ocr.ts(PDF 읽기), group.ts(AI 묶기), draft.ts(초안 만들기) — 저장·화면은 아직
+│  └─ supabase/                공통: Supabase 연결 (서버용 클라이언트, 세션 갱신)
+├─ tests/                      npm test 로 도는 단위 테스트 (core/ 계산 로직, gcam/ 거캠 칸 나누기)
 ├─ .env.example                환경변수 목록 (저장소에서 유일한 .env.example)
 ├─ proxy.ts                    모든 요청에서 로그인 확인
 ├─ vercel.json                 서버 위치를 서울(icn1)로 — Supabase 와 같은 지역
@@ -61,7 +69,7 @@ Src/
 
 ## 기록을 저장하면
 
-`lib/server/records.ts`의 `createRecord`가 순서대로 실행합니다.
+`lib/server/projects/records.ts`의 `createRecord`가 순서대로 실행합니다.
 
 1. `records`에 기록 생성 (문장 ID에 쓸 번호 `no` 발급)
 2. `record_versions`에 버전 1 저장 + 문장 분리

@@ -9,7 +9,7 @@ import { CHECK_LABEL, type CheckKey } from "@/lib/core/index.ts";
 import { requireUser, type Db } from "@/lib/server/auth";
 import { recomputeGraph } from "@/lib/server/graph";
 import * as projects from "@/lib/server/projects";
-import * as records from "@/lib/server/records";
+import * as records from "@/lib/server/projects/records";
 import type { ActionResult } from "@/components/ui/Toast";
 
 /** 공통 처리: 로그인 확인 → 실행 → 화면 갱신. 실패하면 이유를 message 로 돌려준다. */

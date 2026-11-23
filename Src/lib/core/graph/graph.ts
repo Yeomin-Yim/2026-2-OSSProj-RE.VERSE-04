@@ -1,4 +1,4 @@
-import type { ProjectTags, Relation, TagGroup } from "./types.ts";
+import type { ProjectTags, Relation, TagGroup } from "../types.ts";
 
 // 시험값. 바꾸면 analysis_runs.threshold 와 함께 기록한다.
 export const THRESHOLD = 0.18;

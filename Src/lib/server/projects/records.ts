@@ -1,6 +1,6 @@
 import { hash, toSentences } from "@/lib/core/index.ts";
-import type { Db } from "./auth";
-import { loadDictionary } from "./dictionary";
+import type { Db } from "../auth";
+import { loadDictionary } from "../dictionary";
 
 const MAX_CHARS = 20000;
 

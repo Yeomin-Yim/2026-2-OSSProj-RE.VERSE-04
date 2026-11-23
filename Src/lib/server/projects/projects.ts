@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { groupByCode, mergeTags, type ProjectTags, type Sentence, type Source, type Tag } from "@/lib/core/index.ts";
-import type { Db } from "./auth";
+import type { Db } from "../auth";
 
 export interface ProjectRow {
   id: string;

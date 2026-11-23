@@ -1,4 +1,4 @@
-import type { Sentence } from "./types.ts";
+import type { Sentence } from "../types.ts";
 
 // 기록 확인 7항목 (발표 p16). 저장하지 않고 필요할 때마다 계산한다.
 export type CheckKey = "period" | "role" | "problem" | "process" | "result" | "evidence" | "reflection";

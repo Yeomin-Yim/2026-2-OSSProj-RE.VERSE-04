@@ -1,11 +1,11 @@
-// 실행: node --test "Src/core/*.test.ts"
+// 실행: cd Src && npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   checkProject, computeRelations, createTagger, groupByCode, hash, mergeTags,
   nextQuestions, scoreProfiles, splitText, toSentences, type RuleDict,
-} from "./index.ts";
+} from "../../lib/core/index.ts";
 
 const dict: RuleDict = JSON.parse(
   readFileSync(new URL("../../../Doc/design/RE-Cord_규칙사전_v0.5.json", import.meta.url), "utf8"),
