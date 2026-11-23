@@ -31,6 +31,5 @@ cd Src && npm test     # Node 22.18 이상 (TypeScript를 바로 실행)
 
 ## 아직 없는 것
 
-- DB에 읽고 쓰는 코드는 `lib/server`에 있습니다.
 - PDF·DOCX 글 추출(PDF.js, Mammoth).
 - AI 호출(개요·근거 설명·초안).

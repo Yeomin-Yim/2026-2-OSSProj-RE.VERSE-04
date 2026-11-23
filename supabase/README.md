@@ -1,6 +1,6 @@
 # RE:Cord DB (Supabase)
 
-기준: 중간발표 p38 + `local/wireframe.md` 3.1. 충돌하면 중간발표를 따른다.
+기준: 중간발표 p38 + 와이어프레임 3.1(팀 내부 문서). 충돌하면 중간발표를 따른다.
 
 ## 적용 방법
 
@@ -16,7 +16,7 @@ Supabase 대시보드 → **SQL Editor**에서 `migrations/` 파일을 **번호 
 
 프로젝트를 만들 때 Security 설정은 *Enable Data API* 켜기, *Automatically expose new tables* 끄기, *Enable automatic RLS* 켜기.
 
-이미 적용한 파일은 고치지 않는다. 바꿀 것이 생기면 `0005_…sql`처럼 새 파일을 추가한다.
+이미 적용한 파일은 고치지 않는다. 바꿀 것이 생기면 `0006_…sql`처럼 새 파일을 추가한다.
 
 ## 시드 데이터 (김서윤 가상 사례)
 
@@ -89,4 +89,4 @@ auth.users ─ profiles
 
 - `anon` 키: 브라우저에서 써도 된다(RLS가 막는다).
 - `service_role` 키: RLS를 무시한다. **서버·수집 스크립트에서만**, 저장소에 올리지 않는다.
-- 키는 `.env.local`에 두고 커밋하지 않는다. 항목은 저장소 루트의 `.env.example` 참고.
+- 키는 `.env.local`에 두고 커밋하지 않는다. 항목은 `Src/.env.example` 참고.

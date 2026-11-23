@@ -50,6 +50,7 @@ Src/
 │  │  ├─ records.ts            기록 저장: 버전 → 문장 → 태그
 │  │  └─ graph.ts              연결선 계산 · 조회
 │  └─ supabase/                Supabase 연결 (서버용 클라이언트, 세션 갱신)
+├─ .env.example                환경변수 목록 (저장소에서 유일한 .env.example)
 ├─ proxy.ts                    모든 요청에서 로그인 확인
 ├─ vercel.json                 서버 위치를 서울(icn1)로 — Supabase 와 같은 지역
 └─ prototype/                  중간 체크인 HTML 프로토타입 (디자인 기준)
@@ -80,5 +81,5 @@ Src/
 ## 배포 (Vercel)
 
 1. Vercel에서 저장소를 가져올 때 **Root Directory = `Src`**
-2. Environment Variables에 `.env.example`의 항목 등록
+2. Environment Variables에 `Src/.env.example`의 항목 등록
 3. Supabase → Authentication → URL Configuration의 Site URL에 배포 주소 입력
