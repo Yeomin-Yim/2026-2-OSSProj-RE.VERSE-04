@@ -13,10 +13,12 @@ Supabase 대시보드 → **SQL Editor**에서 `migrations/` 파일을 **번호 
 | `0003_storage.sql` | 비공개 버킷 `records` (20MB), 경로 `{owner_id}/{record_id}/{version}/{파일명}` |
 | `0004_tag_dictionary.sql` | 규칙 사전 v0.5 등록 |
 | `0005_drop_project_short_title.sql` | 프로젝트 목록 표시용 `short_title` 컬럼 제거 |
+| `0006_imports.sql` | 거캠 회고록 가져오기: `imports` 표, `records.source_key`·`source_hash`, 버킷 한도 30MB |
+| `0007_page_limit_50.sql` | 파일 업로드 쪽수 제한 20 → 50 |
 
 프로젝트를 만들 때 Security 설정은 *Enable Data API* 켜기, *Automatically expose new tables* 끄기, *Enable automatic RLS* 켜기.
 
-이미 적용한 파일은 고치지 않는다. 바꿀 것이 생기면 `0006_…sql`처럼 새 파일을 추가한다.
+이미 적용한 파일은 고치지 않는다. 바꿀 것이 생기면 `0008_…sql`처럼 새 파일을 추가한다.
 
 ## 시드 데이터 (김서윤 가상 사례)
 
@@ -44,7 +46,7 @@ auth.users ─ profiles
 |---|---|
 | `profiles` | 로그인 사용자. 가입하면 자동 생성 |
 | `projects` | 프로젝트 |
-| `records` | 기록 하나. `no`가 문장 ID의 N 번호 (`N11·V1·S2`) |
+| `records` | 기록 하나. `no`가 문장 ID의 N 번호 (`N11·V1·S2`). `source_key`는 거캠 회고록의 어느 칸에서 왔는지 (`gcam:2026-09-22:pm:0`) |
 | `record_versions` | 본문이 바뀔 때마다 한 줄. `sentences`에 문장 목록 |
 | `experiences` | 태그·개요. `source` = rule / ai / student |
 | `analysis_runs` | 연결선(graph)·학과(college)·직무(career) 계산 결과 |
@@ -53,6 +55,7 @@ auth.users ─ profiles
 | `universities` | 학과별 개설 대학 (점수 없음) |
 | `graph_notes` · `note_projects` | 그래프 노트와 연결 프로젝트 |
 | `scraps` · `todos` · `portfolios` | 스크랩, 할 일, 포트폴리오(초안 `draft` / 수정본 `content`) |
+| `imports` | 거캠 회고록 가져오기 한 건. 진행 상태, OCR 결과(`units`), 초안(`draft`), AI 사용량 |
 
 ## 와이어프레임과 다른 점 (이유)
 
@@ -65,7 +68,7 @@ auth.users ─ profiles
 | `profiles.ui_state` | 그래프 마지막 위치(와이어프레임 S2 데이터) |
 | 점수표 `unique(code, profile_version)` | 점수표를 다시 만들어도 지난 계산 결과가 가리키는 행이 남는다 |
 
-넣지 않은 것: AI 근거 검증 캐시, PDF 자동 분할 필드. 해당 기능을 만들 때 새 마이그레이션으로 추가한다.
+넣지 않은 것: AI 근거 검증 캐시. 해당 기능을 만들 때 새 마이그레이션으로 추가한다.
 
 ## JSON 필드 모양
 

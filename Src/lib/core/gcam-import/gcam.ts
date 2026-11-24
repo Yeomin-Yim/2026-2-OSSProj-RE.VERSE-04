@@ -138,3 +138,20 @@ export function checkAssignment(inputIds: string[], groups: string[][]): string[
   for (const id of expected) if (!seen.has(id)) problems.push(`빠짐 ${id}`);
   return problems;
 }
+
+/**
+ * 노트마다 거캠 칸 키 "gcam:{날짜}:{am|pm}:{칸 안 순번}". 순번은 칸 안에서 첫 단위가 앞선 노트부터 0, 1, …
+ * 다시 올린 PDF는 U번호가 새로 붙으므로, 키는 U번호가 아니라 날짜·칸으로 만든다. 날짜를 못 읽은 칸은 null (항상 새로 만든다).
+ */
+export function sourceKeys(sessions: Session[], notes: string[][]): (string | null)[] {
+  const where = new Map(sessions.flatMap((s) => s.units.map((u, i) => [u.id, { s, i }] as const)));
+  const keys = notes.map(() => null as string | null);
+  const firsts = notes.map((ids, n) => ({ n, at: where.get(ids[0]) })).filter((x) => x.at);
+  for (const same of Map.groupBy(firsts, (x) => x.at!.s).values()) {
+    same.sort((a, b) => a.at!.i - b.at!.i);
+    same.forEach((x, k) => {
+      if (x.at!.s.date) keys[x.n] = `gcam:${x.at!.s.date}:${x.at!.s.part}:${k}`;
+    });
+  }
+  return keys;
+}

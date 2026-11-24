@@ -13,7 +13,7 @@
 | `projects/checks.ts` | 프로젝트 탭: 기록 확인 7항목, 보완 질문(최대 2개) | `checkProject` `nextQuestions` |
 | `graph/graph.ts` | 연결 그래프: 프로젝트 연결 (IDF 가중 자카드) | `computeRelations` |
 | `recommend/recommend.ts` | 학과·직무 점수 (넓이 + 깊이) | `scoreProfiles` |
-| `gcam-import/gcam.ts` | 거캠 회고록 OCR 결과를 날짜×오전/오후 칸으로 나누기, AI 묶음 바로잡기 | `parseSessions` `resolveAssignment` |
+| `gcam-import/gcam.ts` | 거캠 회고록 OCR 결과를 날짜×오전/오후 칸으로 나누기, AI 묶음 바로잡기 | `parseSessions` `resolveAssignment` `sourceKeys` |
 
 ```ts
 import { createTagger, toSentences, groupByCode, computeRelations } from "@/lib/core/index.ts";
@@ -37,5 +37,4 @@ cd Src && npm test     # Node 22.18 이상 (TypeScript를 바로 실행)
 
 ## 아직 없는 것
 
-- 일반 파일(글자 PDF·DOCX) 글 추출.
-- AI 개요·근거 설명·초안. (거캠 회고록 OCR·묶기 AI 호출은 `lib/server/gcam-import/`에 있음)
+- AI 개요·근거 설명·초안. (거캠 회고록 OCR·묶기 AI 호출은 `lib/server/gcam-import/`, 파일 글 추출은 `lib/server/projects/files.ts`에 있음)

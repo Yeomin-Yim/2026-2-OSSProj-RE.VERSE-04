@@ -10,6 +10,7 @@ import { requireUser, type Db } from "@/lib/server/auth";
 import { recomputeGraph } from "@/lib/server/graph";
 import * as projects from "@/lib/server/projects";
 import * as records from "@/lib/server/projects/records";
+import * as files from "@/lib/server/projects/files";
 import type { ActionResult } from "@/components/ui/Toast";
 
 /** 공통 처리: 로그인 확인 → 실행 → 화면 갱신. 실패하면 이유를 message 로 돌려준다. */
@@ -121,4 +122,49 @@ export async function deleteRecord(recordId: string) {
     },
     { regraph: true },
   );
+}
+
+/** 기록을 다른 프로젝트로 옮긴다 (거캠 가져오기 뒤 잘못 묶인 노트 등) */
+export async function moveRecord(recordId: string, projectId: string) {
+  return run(
+    async (db) => {
+      await records.moveRecord(db, recordId, projectId);
+      return { message: "다른 프로젝트로 옮겼어요" };
+    },
+    { regraph: true },
+  );
+}
+
+// ───────── 파일 (파일 1개 = 노트 1개). 쓰는 순서는 lib/server/projects/README.md ─────────
+
+/** ① 업로드 주소 받기. 화면은 uploadUrl 로 파일을 PUT 한 뒤 addFile 을 부른다 */
+export async function prepareFile(fileName: string) {
+  const { supabase, userId } = await requireUser();
+  try {
+    return { ok: true as const, ...(await files.prepareFile(supabase, userId, fileName)) };
+  } catch (e) {
+    return { ok: false as const, message: e instanceof Error ? e.message : "업로드를 준비하지 못했어요." };
+  }
+}
+
+/** ② 올린 파일로 노트 만들기. 글자 PDF·DOCX 는 글을 추출하고, 사진은 파일만 저장 */
+export async function addFile(input: { recordId: string; project_id: string; title: string; fileName: string }) {
+  const { userId } = await requireUser();
+  return run(
+    async (db) => {
+      const { note } = await files.addFile(db, userId, input);
+      return { message: note ?? "파일이 추가되었어요 · 기록 확인을 다시 했어요" };
+    },
+    { regraph: true },
+  );
+}
+
+/** 원본 파일 열기 (1분 동안 유효한 주소) */
+export async function openFile(recordId: string) {
+  const { supabase } = await requireUser();
+  try {
+    return { ok: true as const, url: await files.fileUrl(supabase, recordId) };
+  } catch (e) {
+    return { ok: false as const, message: e instanceof Error ? e.message : "파일을 열지 못했어요." };
+  }
 }

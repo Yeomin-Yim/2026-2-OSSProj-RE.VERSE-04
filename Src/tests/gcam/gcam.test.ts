@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkAssignment, noteText, parseSessions, resolveAssignment, subjectName, type GcamUnit } from "../../lib/core/gcam-import/gcam.ts";
+import { checkAssignment, noteText, parseSessions, resolveAssignment, sourceKeys, subjectName, type GcamUnit } from "../../lib/core/gcam-import/gcam.ts";
 
 let n = 0;
 const u = (type: GcamUnit["type"], text: string): GcamUnit => ({ id: `U${++n}`, page: 1, type, text, uncertain: false });
@@ -66,4 +66,15 @@ test("거캠: 칸의 일부만 빠지면 같은 칸의 앞 단위 묶음에 붙�
   assert.deepEqual(r.groups, [["U8", "U9", "U10"], ["U11"], ["U5", "U6"], ["U17"]]);
   assert.deepEqual(r.missing, []);
   assert.deepEqual(r.fixes, ["붙임 U8→U9", "붙임 U10→U9"]);
+});
+
+test("거캠: 칸 키 — 날짜·오전/오후·칸 안 순번, 노트 순서와 무관", () => {
+  const { sessions } = parseSessions(units);
+  assert.deepEqual(sourceKeys(sessions, [["U17"], ["U10", "U11"], ["U5", "U6"], ["U8", "U9"], ["U99"]]), [
+    "gcam:2026-08-28:pm:0",
+    "gcam:2026-08-27:pm:1",
+    "gcam:2026-08-27:am:0",
+    "gcam:2026-08-27:pm:0",
+    null,
+  ]);
 });

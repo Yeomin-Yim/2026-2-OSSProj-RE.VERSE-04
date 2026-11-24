@@ -24,7 +24,8 @@ Src/
 │  ├─ login/                   로그인 · 로그아웃
 │  ├─ (app)/                   로그인 뒤 화면. layout.tsx 가 왼쪽 메뉴 + 위쪽 바를 그린다
 │  │  ├─ projects/             /projects → 첫 프로젝트로 이동
-│  │  │  ├─ actions.ts         서버 액션 (프로젝트 · 기록 저장). { ok, message } 를 돌려준다
+│  │  │  ├─ actions.ts         서버 액션 (프로젝트 · 기록 저장 · 옮기기 · 파일 올리기). { ok, message } 를 돌려준다
+│  │  │  │  ├─ importActions.ts   서버 액션 (거캠 회고록 가져오기)
 │  │  │  └─ [id]/page.tsx      프로젝트 관리 화면에 필요한 데이터를 한꺼번에 읽는다
 │  │  └─ graph/                프로젝트 연결 목록
 │  ├─ styles/prototype.css     프로토타입 스타일 원본 (직접 고치지 않는다)
@@ -53,9 +54,9 @@ Src/
 │  │  ├─ auth.ts               공통: 로그인 확인 (요청마다 한 번)
 │  │  ├─ dictionary.ts         공통: 활성 규칙 사전 읽기
 │  │  ├─ openai.ts             공통: OpenAI 호출 (구조화 출력)
-│  │  ├─ projects/             프로젝트 탭: projects.ts(프로젝트·기록·개요 조회와 저장), records.ts(기록 저장: 버전 → 문장 → 태그)
+│  │  ├─ projects/             프로젝트 탭: projects.ts(조회·저장), records.ts(기록 저장: 버전 → 문장 → 태그), files.ts(파일 올리기) (README.md)
 │  │  ├─ graph/                연결 그래프: 연결선 계산 · 조회
-│  │  └─ gcam-import/          거캠 회고록 가져오기: ocr.ts(PDF 읽기), group.ts(AI 묶기), draft.ts(초안 만들기) — 저장·화면은 아직
+│  │  └─ gcam-import/          거캠 회고록 가져오기: import.ts(업로드→읽기→묶기→저장), ocr.ts, group.ts, draft.ts — 화면은 아직 (README.md)
 │  └─ supabase/                공통: Supabase 연결 (서버용 클라이언트, 세션 갱신)
 ├─ tests/                      npm test 로 도는 단위 테스트 (core/ 계산 로직, gcam/ 거캠 칸 나누기)
 ├─ .env.example                환경변수 목록 (저장소에서 유일한 .env.example)
@@ -78,16 +79,34 @@ Src/
 
 본문을 고치면 `updateRecordText`가 해시를 비교해, 바뀌었을 때만 새 버전을 만듭니다.
 
+## 프론트 작업을 합친 뒤 꼭 할 일
+
+서버 기능은 다 만들어 두었고, 화면만 아직 없습니다. 프론트 작업과 충돌하지 않도록 미뤄 둔 것이라 **합친 뒤 반드시 붙여야 합니다.**
+
+| 할 일 | 서버 기능 · 설명 문서 |
+|---|---|
+| 파일 올리기: 자료 추가 창에 "파일" 선택 추가 (PDF·DOCX·사진) | `prepareFile` `addFile` · `lib/server/projects/README.md` |
+| 원본 파일 보기: 사진 미리보기, PDF 내려받기 | `openFile` |
+| 거캠 회고록 가져오기: 업로드 → 진행률 → 미리보기 → 미분류 팝업 → 확정 | `importActions.ts` · `lib/server/gcam-import/README.md` |
+| 노트 옮기기: 노트 ⋮ 메뉴에 "다른 프로젝트로 옮기기" | `moveRecord` |
+| 화면 파일도 기능별 폴더로 정리 (lib/ 처럼) | |
+
 ## 아직 없는 것
 
 - 회원가입 화면 (지금은 Supabase 대시보드에서 사용자를 만듭니다)
-- 파일 업로드와 PDF·DOCX 글 추출
 - 학과·직무 추천 화면 (점수표 수집 후)
 - 태그 수정, 포트폴리오, 스크랩, 연결 노트, AI 호출 (개요는 직접 적기만 가능)
 - 연결 그래프 그림 (지금은 목록)
 
 ## 배포 (Vercel)
 
-1. Vercel에서 저장소를 가져올 때 **Root Directory = `Src`**
+1. Vercel에서 저장소를 가져올 때 **Root Directory =** `Src`
 2. Environment Variables에 `Src/.env.example`의 항목 등록
 3. Supabase → Authentication → URL Configuration의 Site URL에 배포 주소 입력
+
+### (Vercel 로그인 필요)
+
+```bash
+cd Src
+vercel --prod
+```

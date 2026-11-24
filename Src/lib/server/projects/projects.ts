@@ -92,7 +92,7 @@ export async function listRecords(db: Db, projectId?: string): Promise<RecordVie
     .from("records")
     .select(
       `id, no, project_id, kind, title, recorded_at, is_result, url, answer_key, current_version,
-       record_versions ( id, version, raw_text, file_path, sentences, experiences ( tags, source ) )`,
+       record_versions ( id, version, raw_text, extracted_text, file_path, sentences, experiences ( tags, source ) )`,
     )
     .order("recorded_at", { ascending: false })
     .order("no", { ascending: false });
@@ -118,7 +118,8 @@ export async function listRecords(db: Db, projectId?: string): Promise<RecordVie
       answer_key: r.answer_key,
       version: r.current_version,
       version_id: latest?.id ?? null,
-      raw_text: latest?.raw_text ?? "",
+      // 파일 기록은 추출한 글. 학생이 고쳤으면 고친 글(raw_text)
+      raw_text: latest?.raw_text || latest?.extracted_text || "",
       has_file: !!latest?.file_path,
       sentences: (latest?.sentences ?? []) as Sentence[],
       tags: mergeTags(bySource),
