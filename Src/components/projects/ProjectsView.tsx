@@ -5,9 +5,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ImportModal } from "@/components/gcam-import/ImportModal";
 import { Icon } from "@/components/ui/Icon";
 import { useToast } from "@/components/ui/Toast";
-import { AddNoteModal } from "./AddNoteModal";
+import { AddNoteModal, type AddKind } from "./AddNoteModal";
 import { NoteList } from "./NoteList";
 import { OverviewTab } from "./OverviewTab";
 import { ProjectModal } from "./ProjectModal";
@@ -33,11 +34,13 @@ export function ProjectsView(props: Props) {
   const { projects, project, records, overview } = props;
   const toast = useToast();
   const [tab, setTab] = useState<TabKey>("files");
-  const [modal, setModal] = useState<"new" | "edit" | "note" | null>(null);
+  const [modal, setModal] = useState<"new" | "edit" | "note" | "import" | null>(null);
+  const [addKind, setAddKind] = useState<AddKind>("file");
+  const openAdd = (kind: AddKind) => { setAddKind(kind); setModal("note"); };
 
   const oldestFirst = [...records].reverse();
   const noteList = (list: RecordView[], empty: string) => (
-    <NoteList records={list} empty={empty} userName={props.userName} tagInfo={props.tagInfo} />
+    <NoteList records={list} empty={empty} userName={props.userName} tagInfo={props.tagInfo} projects={projects} />
   );
 
   return (
@@ -47,6 +50,9 @@ export function ProjectsView(props: Props) {
           <h1 className="title">프로젝트 관리</h1>
           <p className="subtitle">프로젝트를 고르고 기록을 모아요.</p>
         </div>
+        <button className="btn" onClick={() => setModal("import")}>
+          <Icon name="upload" /> 거캠 회고록 가져오기
+        </button>
       </div>
 
       <div className="proj-grid">
@@ -92,7 +98,10 @@ export function ProjectsView(props: Props) {
             <>
               <div className="sec-head">
                 <h3>기록 자료</h3>
-                <button className="btn ghost" onClick={() => setModal("note")}>링크 · 메모</button>
+                <div className="sec-actions">
+                  <button className="btn ghost" onClick={() => openAdd("file")}><Icon name="upload" />파일 올리기</button>
+                  <button className="btn ghost" onClick={() => openAdd("link")}>링크 · 메모</button>
+                </div>
               </div>
               {noteList(records, "아직 자료가 없어요.")}
             </>
@@ -124,7 +133,7 @@ export function ProjectsView(props: Props) {
             projectTags={props.projectTags}
             tagInfo={props.tagInfo}
             onEditProject={() => setModal("edit")}
-            onAddNote={() => setModal("note")}
+            onAddNote={() => openAdd("file")}
             onShowFiles={() => { setTab("files"); toast("사진·파일·링크 자료가 있으면 증빙으로 확인돼요"); }}
           />
         </div>
@@ -132,7 +141,10 @@ export function ProjectsView(props: Props) {
 
       {modal === "new" && <ProjectModal onClose={() => setModal(null)} />}
       {modal === "edit" && <ProjectModal project={project} onClose={() => setModal(null)} />}
-      {modal === "note" && <AddNoteModal projectId={project.id} onClose={() => setModal(null)} />}
+      {modal === "note" && <AddNoteModal projectId={project.id} initialKind={addKind} onClose={() => setModal(null)} />}
+      {modal === "import" && (
+        <ImportModal myProjects={projects.map(({ id, title }) => ({ id, title }))} onClose={() => setModal(null)} />
+      )}
     </div>
   );
 }
