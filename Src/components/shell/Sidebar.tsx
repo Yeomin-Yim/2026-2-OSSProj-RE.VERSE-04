@@ -7,6 +7,8 @@ import { Icon, Logo, type IconName } from "@/components/ui/Icon";
 const NAV: { href: string; icon: IconName; label: string }[] = [
   { href: "/projects", icon: "home", label: "프로젝트 관리" },
   { href: "/graph", icon: "graph", label: "연결 그래프" },
+  { href: "/scraps", icon: "star", label: "스크랩" },
+  { href: "/portfolio", icon: "file", label: "포트폴리오 만들기" },
 ];
 
 export function Sidebar() {
@@ -24,6 +26,7 @@ export function Sidebar() {
           </Link>
         ))}
       </nav>
+      <div className="side-foot">RE:Cord 웹 서비스<br />기록은 내 계정에 저장돼요.</div>
     </aside>
   );
 }

@@ -5,30 +5,39 @@ import { deleteRecord, setResult } from "@/app/(app)/projects/actions";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
 import { useAction } from "@/components/ui/Toast";
+import { MoveNoteModal } from "./MoveNoteModal";
 import { NoteModal } from "./NoteModal";
 import { kindIcon, kindLabel, ymd } from "./format";
-import type { RecordView, TagInfo } from "./types";
+import type { ProjectRow, RecordView, TagInfo } from "./types";
 
 interface Props {
   records: RecordView[];
   empty: string;
   userName: string;
   tagInfo: TagInfo;
+  /** 옮길 수 있는 내 프로젝트 목록. 없으면 '옮기기' 메뉴를 숨긴다 */
+  projects?: ProjectRow[];
 }
 
-/** 자료 목록. 한 줄마다 ⋮ 메뉴(내용 보기 · 결과물 표시 · 삭제)가 있다. */
-export function NoteList({ records, empty, userName, tagInfo }: Props) {
+/** 자료 목록. 한 줄마다 ⋮ 메뉴(내용 보기 · 결과물 표시 · 다른 프로젝트로 옮기기 · 삭제)가 있다. */
+export function NoteList({ records, empty, userName, tagInfo, projects }: Props) {
   const { pending, run } = useAction();
   const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [moveId, setMoveId] = useState<string | null>(null);
 
-  // 메뉴 바깥을 누르면 닫는다
+  // 메뉴 바깥을 누르거나 Esc 를 누르면 닫는다
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [menu]);
 
   if (!records.length) return <div className="empty-note">{empty}</div>;
@@ -37,11 +46,13 @@ export function NoteList({ records, empty, userName, tagInfo }: Props) {
   const menuRecord = byId(menu?.id ?? null);
   const viewing = byId(viewId);
   const deleting = byId(deleteId);
+  const moving = byId(moveId);
+  const canMove = !!projects && projects.length > 1;
 
   function openMenu(e: React.MouseEvent<HTMLButtonElement>, id: string) {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-    const left = Math.max(8, Math.min(window.innerWidth - 180, rect.right - 160));
+    const left = Math.max(8, Math.min(window.innerWidth - 200, rect.right - 180));
     setMenu(menu?.id === id ? null : { id, top: rect.bottom + 4, left });
   }
 
@@ -50,31 +61,45 @@ export function NoteList({ records, empty, userName, tagInfo }: Props) {
       {records.map((r) => (
         <div className="note" key={r.id}>
           <div className="ico"><Icon name={kindIcon(r.kind)} /></div>
-          <div className="nm">
+          <button type="button" className="nm note-open" onClick={() => setViewId(r.id)} aria-label={`${r.title} 내용 보기`}>
             <b>
               {r.title}
               {r.is_result && <span className="tag-result">결과물</span>}
             </b>
-            <small>{ymd(r.recorded_at)} · {userName}</small>
-          </div>
+            <small>{ymd(r.recorded_at)} · {userName}{r.has_file ? " · 원본 파일" : ""}</small>
+          </button>
           <span className="type">{kindLabel(r.kind)}</span>
-          <button className="icon-btn" aria-label="메뉴" onClick={(e) => openMenu(e, r.id)}>
+          <button className="icon-btn" aria-label={`${r.title} 메뉴`} aria-haspopup="menu" aria-expanded={menu?.id === r.id} onClick={(e) => openMenu(e, r.id)}>
             <Icon name="more" />
           </button>
         </div>
       ))}
 
       {menu && menuRecord && (
-        <div className="menu" style={{ position: "fixed", zIndex: 120, top: menu.top, left: menu.left, right: "auto" }}>
-          <button onClick={() => setViewId(menuRecord.id)}><Icon name="eye" />내용 보기</button>
-          <button disabled={pending} onClick={() => run(() => setResult(menuRecord.id, !menuRecord.is_result))}>
+        <div className="menu" role="menu" style={{ position: "fixed", zIndex: 120, top: menu.top, left: menu.left, right: "auto" }}>
+          <button role="menuitem" onClick={() => setViewId(menuRecord.id)}><Icon name="eye" />내용 보기</button>
+          <button role="menuitem" disabled={pending} onClick={() => run(() => setResult(menuRecord.id, !menuRecord.is_result))}>
             <Icon name="star" />{menuRecord.is_result ? "결과물 표시 해제" : "결과물로 표시"}
           </button>
-          <button className="danger" onClick={() => setDeleteId(menuRecord.id)}><Icon name="trash" />삭제</button>
+          {canMove && (
+            <button role="menuitem" onClick={() => setMoveId(menuRecord.id)}><Icon name="move" />다른 프로젝트로 옮기기</button>
+          )}
+          <button role="menuitem" className="danger" onClick={() => setDeleteId(menuRecord.id)}><Icon name="trash" />삭제</button>
         </div>
       )}
 
-      {viewing && <NoteModal record={viewing} tagInfo={tagInfo} onClose={() => setViewId(null)} />}
+      {viewing && (
+        <NoteModal
+          record={viewing}
+          tagInfo={tagInfo}
+          onClose={() => setViewId(null)}
+          onMove={canMove ? () => setMoveId(viewing.id) : undefined}
+        />
+      )}
+
+      {moving && projects && (
+        <MoveNoteModal record={moving} projects={projects} onClose={() => setMoveId(null)} onMoved={() => setViewId(null)} />
+      )}
 
       {deleting && (
         <Modal onClose={() => setDeleteId(null)}>

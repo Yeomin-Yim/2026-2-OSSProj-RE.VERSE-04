@@ -1,0 +1,82 @@
+/* 연결 그래프 전용 스타일. 바깥 틀(.lm .workspace · .graph-shell · .lm-panel …)은 prototype.css 를 그대로 쓰고,
+   SVG 그림과 이 화면에만 있는 것만 여기에 둔다. */
+
+.workspace { height: 660px; }
+.workspace > * { min-width: 0; }
+
+.stage { position: absolute; inset: 0; }
+.svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; }
+.svg:active { cursor: grabbing; }
+
+/* ───── 선 */
+.edge { cursor: pointer; transition: opacity .2s; }
+.edgeHit { stroke: transparent; stroke-width: 16; }
+.edgeLine { stroke: var(--primary); stroke-linecap: round; }
+.edgeOn { stroke: var(--primary-dark); stroke-linecap: round; }
+.edgeWeak { stroke: #A9B8D0; stroke-dasharray: 4 5; stroke-linecap: round; }
+.edge:hover .edgeLine { stroke: var(--primary-dark); }
+.edgeBadge { fill: var(--navy); }
+.edgeBadgeText { fill: #fff; font-size: 11px; font-weight: 700; }
+
+/* ───── 점 */
+.node { cursor: pointer; outline: none; transition: opacity .2s; }
+.dot { fill: var(--primary); stroke: #fff; stroke-width: 2.5; transition: transform .15s; }
+.done .dot { fill: var(--sky); }
+.alone .dot { stroke: var(--lav-line); stroke-dasharray: 3 3; }
+.ring { fill: none; stroke: transparent; stroke-width: 3; }
+.node:hover .dot { transform: scale(1.06); }
+.node:focus-visible .ring { stroke: var(--lav-line); }
+.on .ring { stroke: var(--yellow-deep); stroke-width: 4; }
+.count { fill: #fff; font-size: 11px; font-weight: 700; pointer-events: none; }
+.label {
+  fill: var(--navy); font-size: 12px; font-weight: 600; pointer-events: none;
+  paint-order: stroke; stroke: #F7F9FD; stroke-width: 4px; stroke-linejoin: round;
+}
+.dim { opacity: .22; }
+
+/* ───── 도구 · 알림 */
+.weakToggle {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px;
+  background: #fff; border: 1px solid var(--line); font-size: 11.5px; font-weight: 600; color: var(--sub); cursor: pointer;
+}
+.weakToggle input { margin: 0; accent-color: var(--primary); }
+.weakToggle:has(input:disabled) { opacity: .55; cursor: default; }
+.weakCount { font-size: 10.5px; color: var(--hint); }
+.notice {
+  flex: 1 1 260px; max-width: 460px; padding: 6px 12px; border-radius: 10px; background: var(--yellow-soft);
+  border: 1px solid var(--yellow-deep); color: var(--navy); font-size: 11.5px; line-height: 1.45;
+}
+.legendLine { width: 16px !important; height: 3px !important; border-radius: 2px !important; background: var(--primary); }
+
+/* ───── 오른쪽 패널 */
+.meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 10px; font-size: 11.5px; color: var(--sub); }
+.badge { padding: 2px 8px; border-radius: 99px; background: var(--lav); color: var(--primary); font-weight: 700; font-size: 11px; }
+.badgeDone { background: #EEF2F9; color: #3F5273; }
+.muted { margin: 6px 0 0; color: var(--hint); font-size: 11px; font-weight: 500; line-height: 1.5; }
+.pair { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.pair button {
+  border: 0; background: none; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--lav-line); text-underline-offset: 4px;
+}
+.pair button:hover { color: var(--primary); }
+.pair span { color: var(--hint); font-size: 15px; }
+.scoreLabel { font-weight: 600 !important; font-size: 11px !important; color: var(--sub) !important; }
+.bar { position: relative; overflow: visible !important; }
+.bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--yellow-deep); border-radius: 1px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.stats div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 8px; text-align: center; background: #F7F9FD; }
+.stats b { display: block; font-size: 18px; color: var(--primary); }
+.stats span { font-size: 11px; color: var(--sub); }
+.pairText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ───── 빈 화면 */
+.empty { display: grid; justify-items: center; gap: 6px; padding: 56px 20px; text-align: center; color: var(--sub); }
+.empty svg { width: 40px; height: 40px; color: var(--primary); }
+.empty h2 { margin: 6px 0 0; font-size: 17px; color: var(--text); }
+.empty p { margin: 0 0 12px; font-size: 12.5px; max-width: 360px; line-height: 1.6; }
+
+@media (max-width: 1100px) {
+  /* prototype.css 가 1fr 로 바꾸는데, 패널의 한 줄 글자가 열을 넓히지 않도록 minmax(0,…) 로 막는다 */
+  .workspace { height: auto; grid-template-columns: minmax(0, 1fr) !important; }
+}

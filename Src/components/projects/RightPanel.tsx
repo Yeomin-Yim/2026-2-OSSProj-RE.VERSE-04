@@ -4,7 +4,7 @@ import { useState } from "react";
 import { saveAnswer } from "@/app/(app)/projects/actions";
 import { Icon } from "@/components/ui/Icon";
 import { useAction, useToast } from "@/components/ui/Toast";
-import { CHECK_LABEL, CHECK_ORDER, type CheckKey } from "@/lib/core/checks.ts";
+import { CHECK_LABEL, CHECK_ORDER, type CheckKey } from "@/lib/core/index.ts";
 import { ymd } from "./format";
 import type { Checks, Guide, ProjectRow, RecordView, TagInfo } from "./types";
 
