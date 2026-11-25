@@ -27,11 +27,23 @@ Src/
 │  │  │  ├─ actions.ts         서버 액션 (프로젝트 · 기록 저장 · 옮기기 · 파일 올리기). { ok, message } 를 돌려준다
 │  │  │  │  ├─ importActions.ts   서버 액션 (거캠 회고록 가져오기)
 │  │  │  └─ [id]/page.tsx      프로젝트 관리 화면에 필요한 데이터를 한꺼번에 읽는다
-│  │  └─ graph/                연결 그래프 (데이터 조회 → components/graph/GraphView)
+│  │  ├─ graph/                연결 그래프. page.tsx: 진로 탐색(기본) · ?view=links 프로젝트 연결 · ?demo=1 시연 모드
+│  │  │  └─ actions.ts         서버 액션 (그래프 노트 · 스크랩 · 체크리스트 · 탐색 위치)
+│  │  ├─ scraps/               스크랩 (scraps · todos 표)
+│  │  └─ portfolio/            포트폴리오 만들기 3단계 (?step=1|2|3). actions.ts: portfolios 표 저장
 │  ├─ styles/prototype.css     프로토타입 스타일 원본 (직접 고치지 않는다)
 │  └─ globals.css              프로토타입에 없는 화면용 추가 스타일
 ├─ components/
-│  ├─ ui/                      Icon · Modal · Toast (어느 화면에서나 쓰는 것)
+│  ├─ ui/                      Icon · Modal · Toast · Notice(경고 배너) (어느 화면에서나 쓰는 것)
+│  ├─ student/StudentData.tsx  스크랩 ★ 버튼 · 해야 할 일 체크리스트 (여러 화면이 같이 쓰는 상태)
+│  ├─ explore/                 진로 탐색 그래프 (프로토타입 #/learning 이식)
+│  │  ├─ ExploreGraph.tsx      진입 선택 · 생성 모션 · SVG 그래프 · 오른쪽 패널 · 채용공고 목록
+│  │  ├─ layout.ts             배치 (프로토타입 buildData 그대로, 라이브러리 없음)
+│  │  ├─ NoteDock.tsx          그래프 아래 노트 · 프로젝트 패널, 새 노트 창
+│  │  ├─ info.ts               준비 정보 선택지 · 기본 체크리스트 (실제 모드에서도 쓰는 일반 안내)
+│  │  └─ demo.ts               ⚠ 시연 모드 전용 예시 데이터 (프로토타입 RC.mock)
+│  ├─ scraps/ScrapsView.tsx    스크랩 화면
+│  ├─ portfolio/               PortfolioWizard.tsx(3단계) · Sheets.tsx(사람인 디자인 포트폴리오 · 동국대 대체서식 인쇄본)
 │  ├─ shell/                   Sidebar · Topbar
 │  ├─ graph/                   연결 그래프: GraphView.tsx(SVG 그림 + 오른쪽 패널), layout.ts(배치 계산, 라이브러리 없음)
 │  ├─ gcam-import/             거캠 회고록 가져오기: ImportModal.tsx(올리기→읽기→묶기→저장), DraftEditor.tsx(미리보기·수정)
@@ -51,7 +63,8 @@ Src/
 │  │  ├─ text · sentences · tagger · types   공통: 글 정리, 문장 ID, 규칙 태깅
 │  │  ├─ projects/checks.ts    프로젝트 탭: 기록 확인 7항목, 보완 질문
 │  │  ├─ graph/graph.ts        연결 그래프: 프로젝트 연결 점수
-│  │  ├─ recommend/            학과·직무 추천 점수 (화면은 아직 없음)
+│  │  ├─ recommend/            학과·직무 추천 점수 (진로 탐색 그래프가 사용)
+│  │  ├─ portfolio/            포트폴리오 서식(templates.ts) · 개요 옮기기 · AI 지시문(draft.ts). AI 아님
 │  │  ├─ gcam-import/gcam.ts   거캠 회고록 가져오기: 칸 나누기, AI 묶음 바로잡기
 │  │  └─ index.ts              위 전부를 내보낸다. 화면에서는 "@/lib/core/index.ts" 하나로 불러 쓴다
 │  ├─ server/                  DB 읽기·쓰기 + 외부 API. 서버에서만 실행
@@ -60,9 +73,11 @@ Src/
 │  │  ├─ openai.ts             공통: OpenAI 호출 (구조화 출력)
 │  │  ├─ projects/             프로젝트 탭: projects.ts(조회·저장), records.ts(기록 저장: 버전 → 문장 → 태그), files.ts(파일 올리기) (README.md)
 │  │  ├─ graph/                연결 그래프: 연결선 계산 · 조회
+│  │  ├─ explore/              진로 탐색: 점수표(major_profiles·job_profiles) × 내 기록 태그 → 추천, universities
+│  │  ├─ student/              학생 기능 표: notes(graph_notes·note_projects) · scraps · todos · portfolio
 │  │  └─ gcam-import/          거캠 회고록 가져오기: import.ts(업로드→읽기→묶기→저장), ocr.ts, group.ts, draft.ts — 화면은 아직 (README.md)
 │  └─ supabase/                공통: Supabase 연결 (서버용 클라이언트, 세션 갱신)
-├─ tests/                      npm test 로 도는 단위 테스트 (core/ 계산 로직, gcam/ 거캠 칸 나누기, graph/ 그래프 배치)
+├─ tests/                      npm test 로 도는 단위 테스트 (core/ 계산 로직, gcam/ 거캠 칸 나누기, graph/ 그래프 배치 · 진로 탐색 배치, portfolio/ 포트폴리오)
 ├─ .env.example                환경변수 목록 (저장소에서 유일한 .env.example)
 ├─ proxy.ts                    모든 요청에서 로그인 확인
 ├─ vercel.json                 서버 위치를 서울(icn1)로 — Supabase 와 같은 지역
@@ -85,21 +100,40 @@ Src/
 
 ## 화면 연결 상태
 
-서버 기능을 화면에 모두 붙였습니다.
+왼쪽 메뉴 4개(프로젝트 관리 · 연결 그래프 · 스크랩 · 포트폴리오 만들기)는 모두 프로토타입 HTML과 같은 구성입니다.
 
-| 기능 | 화면 | 서버 기능 · 설명 문서 |
+| 화면 · 기능 | 상태 | 데이터 · 서버 기능 |
 |---|---|---|
-| 파일 올리기 (PDF·DOCX·사진) | 자료 탭 "파일 올리기" · 자료 추가 창의 "파일" | `prepareFile` `addFile` · `lib/server/projects/README.md` |
-| 원본 파일 보기 | 내용 보기 창의 "원본 파일", 사진은 미리보기 | `openFile` |
-| 거캠 회고록 가져오기 | 프로젝트 관리 위쪽 버튼 · 프로젝트가 없을 때 화면 | `importActions.ts` · `lib/server/gcam-import/README.md` |
-| 노트 옮기기 | 노트 ⋮ 메뉴 · 내용 보기 창의 "옮기기" | `moveRecord` |
-| 연결 그래프 그림 | /graph | `latestRelations` |
+| 프로젝트 관리 (목록 · 탭 · 보완 제안 · 기록 확인) | 실제 연결 | `projects` `records` `experiences` |
+| 파일 올리기 (PDF·DOCX·사진) · 원본 파일 보기 | 실제 연결 | `prepareFile` `addFile` `openFile` · `lib/server/projects/README.md` |
+| 거캠 회고록 가져오기 | 실제 연결 | `importActions.ts` · `lib/server/gcam-import/README.md` |
+| 노트 옮기기 | 실제 연결 | `moveRecord` |
+| 프로젝트 > 연결 노트 탭 · 개요 탭 체크리스트 | 실제 연결 | `graph_notes` `note_projects` `todos` |
+| 연결 그래프 > 프로젝트 연결 (`?view=links`) | 실제 연결 | `latestRelations` (서버 계산값·기준값 그대로, 연결 없는 프로젝트는 따로 떨어진 점) |
+| 연결 그래프 > 진로 탐색: 진입 선택 · 탐색 경로 · 노트 · 스크랩 · 체크리스트 · 마지막 위치 | 실제 연결 | `graph_notes` `scraps` `todos` `profiles.ui_state` |
+| 진로 탐색 > 추천 학과 · 직무 | 화면 연결 완료, **데이터 필요** | `scoreProfiles(내 기록 태그, major_profiles/job_profiles)`. 점수표가 비어 있으면 "준비 중" 안내 |
+| 진로 탐색 > 개설 대학 | 화면 연결 완료, **데이터 필요** | `universities` (학과 코드별). 비어 있으면 안내 |
+| 진로 탐색 > 채용공고 | **서버 기능 필요** | 표·수집 기능 없음 → 안내만. 예시는 시연 모드에서만 |
+| 스크랩 (필터 · 메모 · 체크리스트 · 원래 위치로 이동) | 실제 연결 | `scraps` `todos`. 채용공고 탭은 빈 상태 |
+| 포트폴리오 1~3단계 · 미리보기 · 인쇄 · 자동 저장 | 실제 연결 | `portfolios` (template_id · project_ids · content · profile · alt · built_at) |
+| 포트폴리오 AI 초안 · 문장 다듬기 | **서버 기능 필요** | 버튼은 "AI 미연결"로 비활성. 지금은 개요의 글을 그대로 옮기고 직접 고친다 |
+| 시연 모드 (`/graph?demo=1`) | 예시 데이터만 | `components/explore/demo.ts`. 띠로 구분, 스크랩·체크리스트 저장 안 함 |
+
+## 서버 기능이 더 필요한 것 (화면은 준비됨)
+
+1. **학과·직무 점수표 · 대학 목록 수집** — `major_profiles` `job_profiles` (`weights = {태그코드: 1~3}`), `universities` (`major_code`).
+   들어오면 화면 수정 없이 `lib/server/explore/explore.ts`의 `loadExplore`가 추천을 계산해 보여 준다. 계산 결과를 `analysis_runs`(purpose=college|career)에 남기려면 같은 파일에서 저장만 추가한다.
+2. **채용공고** — 표 예: `job_postings(id, job_code, company, title, location, deadline, requirements text[], preferred text[], summary, url, fetched_at)`.
+   화면은 `ExNode.posting` 모양을 쓴다 (`loadExplore`의 `career.next[직무 id]`에 `kind: "posting"` 노드로 넣으면 된다).
+   스크랩하려면 `scraps.type` check 에 `'posting'`을 더하는 마이그레이션이 필요하다 (지금은 `major·job·university·note·project`만 허용).
+3. **AI 초안 · 문장 다듬기** — 입력·지시문은 `lib/core/portfolio/draft.ts`의 `buildPrompt`가 이미 만든다 ("프롬프트 보기").
+   서버 액션 계약 예: `generateDraft(projectId) → { problem, role, result }` (각 `{ text, sids }`, `portfolios.draft`에 저장),
+   `refineText(mode: 'concise'|'role'|'rewrite', text) → { text, changed }`. 연결되면 `PortfolioWizard`의 비활성 버튼만 켠다.
 
 ## 아직 없는 것
 
 - 회원가입 화면 (지금은 Supabase 대시보드에서 사용자를 만듭니다)
-- 학과·직무 추천 화면 (점수표 수집 후)
-- 태그 수정, 포트폴리오, 스크랩, 연결 노트, AI 호출 (개요는 직접 적기만 가능)
+- 태그 수정, 위쪽 바의 노트 검색·알림 (프로토타입에는 있음)
 
 ## 배포 (Vercel)
 

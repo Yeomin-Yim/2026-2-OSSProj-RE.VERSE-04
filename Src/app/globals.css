@@ -205,3 +205,6 @@
   .imp-date{width:auto}
   .sec-head{flex-wrap:wrap;gap:8px}
 }
+
+/* 스크랩 카드의 '함께 저장한 노트': 프로젝트 자료 목록의 .note(가로 정렬)와 이름이 겹쳐 세로로 되돌린다 */
+.sc-card .note { display: block; border-bottom: 0; }
