@@ -17,6 +17,9 @@ const PATHS = {
   trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
   star: <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z" />,
   user: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" /></>,
+  upload: <><path d="M12 16V4M7 9l5-5 5 5" /><path d="M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4" /></>,
+  move: <><path d="M4 12h13M13 7l5 5-5 5" /><path d="M20 5v14" /></>,
+  download: <><path d="M12 4v12M7 11l5 5 5-5" /><path d="M5 20h14" /></>,
 } as const;
 
 export type IconName = keyof typeof PATHS;
