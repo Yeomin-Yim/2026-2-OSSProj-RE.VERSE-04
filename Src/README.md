@@ -27,17 +27,21 @@ Src/
 │  │  │  ├─ actions.ts         서버 액션 (프로젝트 · 기록 저장 · 옮기기 · 파일 올리기). { ok, message } 를 돌려준다
 │  │  │  │  ├─ importActions.ts   서버 액션 (거캠 회고록 가져오기)
 │  │  │  └─ [id]/page.tsx      프로젝트 관리 화면에 필요한 데이터를 한꺼번에 읽는다
-│  │  └─ graph/                프로젝트 연결 목록
+│  │  └─ graph/                연결 그래프 (데이터 조회 → components/graph/GraphView)
 │  ├─ styles/prototype.css     프로토타입 스타일 원본 (직접 고치지 않는다)
 │  └─ globals.css              프로토타입에 없는 화면용 추가 스타일
 ├─ components/
 │  ├─ ui/                      Icon · Modal · Toast (어느 화면에서나 쓰는 것)
 │  ├─ shell/                   Sidebar · Topbar
+│  ├─ graph/                   연결 그래프: GraphView.tsx(SVG 그림 + 오른쪽 패널), layout.ts(배치 계산, 라이브러리 없음)
+│  ├─ gcam-import/             거캠 회고록 가져오기: ImportModal.tsx(올리기→읽기→묶기→저장), DraftEditor.tsx(미리보기·수정)
 │  └─ projects/                프로젝트 관리 화면
 │     ├─ ProjectsView.tsx      3단 구성의 뼈대 (목록 · 상세 탭 · 오른쪽 패널)
-│     ├─ NoteList.tsx          자료 목록과 ⋮ 메뉴
-│     ├─ NoteModal.tsx         내용 보기 · 본문 수정
-│     ├─ AddNoteModal.tsx      링크 · 메모 추가
+│     ├─ NoteList.tsx          자료 목록과 ⋮ 메뉴 (내용 보기 · 결과물 · 옮기기 · 삭제)
+│     ├─ NoteModal.tsx         내용 보기 · 본문 수정 · 원본 파일 · 사진 미리보기
+│     ├─ AddNoteModal.tsx      자료 추가: 파일 · 링크 · 메모
+│     ├─ FileUploadPanel.tsx   파일 올리기 (PDF · DOCX · 사진, 여러 개를 차례로)
+│     ├─ MoveNoteModal.tsx     노트를 다른 프로젝트로 옮기기
 │     ├─ ProjectModal.tsx      새 프로젝트 · 수정 · 삭제
 │     ├─ OverviewTab.tsx       개요 6항목
 │     ├─ RightPanel.tsx        보완 제안 · 기록 확인 · 프로젝트 태그
@@ -58,7 +62,7 @@ Src/
 │  │  ├─ graph/                연결 그래프: 연결선 계산 · 조회
 │  │  └─ gcam-import/          거캠 회고록 가져오기: import.ts(업로드→읽기→묶기→저장), ocr.ts, group.ts, draft.ts — 화면은 아직 (README.md)
 │  └─ supabase/                공통: Supabase 연결 (서버용 클라이언트, 세션 갱신)
-├─ tests/                      npm test 로 도는 단위 테스트 (core/ 계산 로직, gcam/ 거캠 칸 나누기)
+├─ tests/                      npm test 로 도는 단위 테스트 (core/ 계산 로직, gcam/ 거캠 칸 나누기, graph/ 그래프 배치)
 ├─ .env.example                환경변수 목록 (저장소에서 유일한 .env.example)
 ├─ proxy.ts                    모든 요청에서 로그인 확인
 ├─ vercel.json                 서버 위치를 서울(icn1)로 — Supabase 와 같은 지역
@@ -79,24 +83,23 @@ Src/
 
 본문을 고치면 `updateRecordText`가 해시를 비교해, 바뀌었을 때만 새 버전을 만듭니다.
 
-## 프론트 작업을 합친 뒤 꼭 할 일
+## 화면 연결 상태
 
-서버 기능은 다 만들어 두었고, 화면만 아직 없습니다. 프론트 작업과 충돌하지 않도록 미뤄 둔 것이라 **합친 뒤 반드시 붙여야 합니다.**
+서버 기능을 화면에 모두 붙였습니다.
 
-| 할 일 | 서버 기능 · 설명 문서 |
-|---|---|
-| 파일 올리기: 자료 추가 창에 "파일" 선택 추가 (PDF·DOCX·사진) | `prepareFile` `addFile` · `lib/server/projects/README.md` |
-| 원본 파일 보기: 사진 미리보기, PDF 내려받기 | `openFile` |
-| 거캠 회고록 가져오기: 업로드 → 진행률 → 미리보기 → 미분류 팝업 → 확정 | `importActions.ts` · `lib/server/gcam-import/README.md` |
-| 노트 옮기기: 노트 ⋮ 메뉴에 "다른 프로젝트로 옮기기" | `moveRecord` |
-| 화면 파일도 기능별 폴더로 정리 (lib/ 처럼) | |
+| 기능 | 화면 | 서버 기능 · 설명 문서 |
+|---|---|---|
+| 파일 올리기 (PDF·DOCX·사진) | 자료 탭 "파일 올리기" · 자료 추가 창의 "파일" | `prepareFile` `addFile` · `lib/server/projects/README.md` |
+| 원본 파일 보기 | 내용 보기 창의 "원본 파일", 사진은 미리보기 | `openFile` |
+| 거캠 회고록 가져오기 | 프로젝트 관리 위쪽 버튼 · 프로젝트가 없을 때 화면 | `importActions.ts` · `lib/server/gcam-import/README.md` |
+| 노트 옮기기 | 노트 ⋮ 메뉴 · 내용 보기 창의 "옮기기" | `moveRecord` |
+| 연결 그래프 그림 | /graph | `latestRelations` |
 
 ## 아직 없는 것
 
 - 회원가입 화면 (지금은 Supabase 대시보드에서 사용자를 만듭니다)
 - 학과·직무 추천 화면 (점수표 수집 후)
 - 태그 수정, 포트폴리오, 스크랩, 연결 노트, AI 호출 (개요는 직접 적기만 가능)
-- 연결 그래프 그림 (지금은 목록)
 
 ## 배포 (Vercel)
 
