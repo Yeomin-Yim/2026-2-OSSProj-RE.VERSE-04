@@ -46,3 +46,17 @@
 - 이유: 마감(12/1 기능 동결)까지 시간이 부족하고, 질문 대기는 루프를 멈춘다. 판단 근거는 이 파일에 남겨 사후 검토로 대신한다.
 - 포기한 것: 변경 전 사람 승인. 대신 반복마다 커밋 → 어떤 반복이든 `git revert`로 되돌릴 수 있다.
 - 남긴 안전장치(제한이 아니라 품질 장치): 반복별 커밋, 커밋 후 테스트 실패 시 자동 revert, 5회 연속 진척 없으면 정지(고장 난 상태로 사용량만 쓰는 것 방지), 작업은 autodev/ 브랜치(팀원 브랜치와 분리).
+
+## D003. 비어 있는 점수표를 profiles.csv 초안으로 채운다 (2026-11-27 · 반복 #001 · 작업 T05)
+- 상태: 확인됨
+- 상황: 원격 DB의 `major_profiles`·`job_profiles`·`universities`가 모두 0행이다(REST count 확인). 그래서 진로 탐색 그래프는 실제 계정에서 항상 "점수표 준비 중"(status `no-profiles`)만 보여 주고, 시연 흐름 "기록 → 그래프 → 진학/취업 → 근거"가 여기서 끊긴다. 계획했던 T00·문장 다듬기보다 이게 먼저다.
+- 근거: `lib/server/explore/explore.ts:113` (점수표 없으면 no-profiles), `zz_local/profiles.csv` 20줄(학과 10·직무 10, 검토 상태 전부 "초안(팀 검수 전)", profile_version `2026-11-23-draft-0.3`), `supabase/seed/build_profiles.ts`(CSV→SQL), `scripts/build_keyword_profiles.ts`(AI 키워드 방식)
+- 선택지: (a) build_profiles.ts 에 `--apply`(service role REST로 바로 upsert)를 붙여 CSV 초안을 그대로 넣는다 (b) build_keyword_profiles.ts(AI 파이프라인)로 새로 만든다 (c) SQL 파일만 만들고 사람이 SQL Editor에 붙여 넣기를 기다린다
+- 결정: (a), `--draft` 로 초안 포함. 태그가 하나도 없는 줄(정보보호학과 488)은 어떤 기록과도 맞을 수 없으므로 오류로 멈추지 않고 건너뛰며 경고한다.
+- 이유: (b)는 service role 이 `keywords` 표에 권한이 없어(42501 permission denied, 0008 이후 표에 grant 누락) 지금 실행이 안 되고, psql/DB 비밀번호가 없어 grant 마이그레이션을 내가 적용할 수도 없다. (c)는 루프를 사람에게 묶는다. CSV 초안은 사람이 만든 지시서·AI 검토를 거친 값이고 AI 호출 비용이 0이다. 버전 문자열이 `draft`라 나중에 검수본(더 큰 버전)이나 kw- 버전이 들어오면 `latest()`가 자동으로 그것을 쓴다.
+- 포기한 것: 팀 검수 전 값으로 추천이 나온다(정확도 미보장). 대학 목록은 이번에 넣지 않는다 — 커리어넷 MAJOR_VIEW(univ_list)가 학과당 ~248개(569 기준)를 주는데 지금 그래프는 대학을 노드로 전부 펼쳐서, 순위 없는 대학 수백 개를 노드로 그리거나 임의로 자르는 건 둘 다 잘못이다 → T05b로 분리.
+- 예측: 적용 후 REST count 가 major_profiles 9, job_profiles 10. service role 로 `loadExplore`를 실제 학생 기록에 돌리면 college 또는 career 중 최소 한쪽 status 가 `ready`이고 추천이 1개 이상 나온다. 기존 테스트 47개 그대로 통과.
+- 확인 방법: curl count, `zz_local/autodev/check_explore.ts`(커밋 안 함)로 loadExplore 결과 출력, `npm test && npx tsc --noEmit && npm run build`
+- 결과: 확인됨. `--draft --apply` → "학과 9 · 직무 10 · 대학 0 (뺀 줄 1)", REST count 9/10. 시드 학생(김서윤, 프로젝트 5)으로 같은 계산: 학과 컴퓨터공학과 85.7(넓이 100·깊이 71.4)·소프트웨어공학과 75·통계학과 64.3…, 직무 빅 데이터 전문가 75·가상현실전문가 72.2·모바일앱개발자 71.4…. 실제 화면 `autodev/shots/001-graph-career.png`: 취업 → 추천 직무 5개 노드·오른쪽 목록·"합격·취업 가능성이 아니에요" 안내 확인. test 49/49(시작 시 47 → 같은 시간에 다른 작업자가 keywords 테스트를 추가한 것, 내 변경 아님) · tsc 0 · build 통과.
+  - 관찰: 점수표가 IT 분야 위주(지시서 C항)라 환경·지역 프로젝트가 많은 학생도 컴퓨터공학과가 1위로 나온다. 초안이라는 사실이 화면에 없다 → T05c.
+- 커밋: (아래 커밋)
