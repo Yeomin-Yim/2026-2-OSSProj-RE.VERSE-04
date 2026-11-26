@@ -16,13 +16,14 @@ import { OverviewTab } from "./OverviewTab";
 import { ProjectModal } from "./ProjectModal";
 import { RightPanel } from "./RightPanel";
 import { STATUS_LABEL, ym } from "./format";
-import type { Checks, Guide, Overview, ProjectRow, RecordView, TabKey, TagInfo } from "./types";
+import type { AiOverview, Checks, Guide, Overview, ProjectRow, RecordView, TabKey, TagInfo } from "./types";
 
 interface Props {
   projects: ProjectRow[];
   project: ProjectRow;
   records: RecordView[];
   overview: Overview;
+  aiOverview: AiOverview | null;
   checks: Checks;
   guides: Guide[];
   projectTags: { code: string; count: number }[];
@@ -134,7 +135,7 @@ export function ProjectsView(props: Props) {
               )}
             </>
           )}
-          {tab === "overview" && <OverviewTab projectId={project.id} overview={overview} />}
+          {tab === "overview" && <OverviewTab projectId={project.id} overview={overview} ai={props.aiOverview} records={records} />}
           {tab === "log" && noteList(oldestFirst.filter((r) => !r.is_result), "진행 기록이 없어요.")}
           {tab === "result" && (
             <>

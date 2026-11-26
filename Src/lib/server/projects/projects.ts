@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { groupByCode, mergeTags, type ProjectTags, type Sentence, type Source, type Tag } from "@/lib/core/index.ts";
+import { groupByCode, mergeTags, type Cited, type ProjectTags, type Sentence, type Source, type Tag } from "@/lib/core/index.ts";
 import type { Db } from "../auth";
 
 export interface ProjectRow {
@@ -138,7 +138,10 @@ export function toProjectTags(records: RecordView[]): ProjectTags[] {
 
 // ───────── 개요 ─────────
 
-/** 프로젝트 개요 6항목. 학생이 쓴 값이 AI 값보다 우선한다. */
+/**
+ * 프로젝트 개요 6항목. 학생이 저장한 개요가 있으면 그것만 쓰고, 없으면 AI 값.
+ * (학생이 일부러 비운 칸에 AI 글이 되살아나지 않도록 항목별로 섞지 않는다)
+ */
 export async function getOverview(db: Db, projectId: string): Promise<Overview> {
   const { data, error } = await db
     .from("experiences")
@@ -146,32 +149,51 @@ export async function getOverview(db: Db, projectId: string): Promise<Overview> 
     .eq("project_id", projectId)
     .is("record_version_id", null);
   if (error) throw new Error(error.message);
-
-  const fieldsOf = (source: Source) =>
-    (data.find((row) => row.source === source)?.fields ?? {}) as Partial<Record<OverviewKey, { text: string }>>;
-  const student = fieldsOf("student");
-  const ai = fieldsOf("ai");
-
-  return Object.fromEntries(
-    OVERVIEW_KEYS.map((key) => [key, student[key]?.text || ai[key]?.text || ""]),
-  ) as Overview;
+  return pickOverview(data);
 }
+
+/** 개요 행들(출처별) 중 학생 행 > AI 행 하나를 골라 글만 꺼낸다 */
+export function pickOverview(rows: { fields: unknown; source: string }[]): Overview {
+  const row = rows.find((r) => r.source === "student") ?? rows.find((r) => r.source === "ai");
+  const fields = (row?.fields ?? {}) as Partial<Record<OverviewKey, { text?: string }>>;
+  return Object.fromEntries(OVERVIEW_KEYS.map((key) => [key, fields[key]?.text ?? ""])) as Overview;
+}
+
+/** AI 가 만든 개요 6항목 (근거 문장 ID 포함). 없으면 null */
+export async function getAiOverview(db: Db, projectId: string): Promise<AiOverview | null> {
+  const { data, error } = await db
+    .from("experiences")
+    .select("fields")
+    .eq("project_id", projectId)
+    .is("record_version_id", null)
+    .eq("source", "ai")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data?.fields as AiOverview) ?? null;
+}
+
+export type AiOverview = Record<OverviewKey, Cited>;
 
 /** 학생이 고친 개요를 저장한다 (source=student). */
 export async function saveOverview(db: Db, projectId: string, overview: Overview) {
   const fields = Object.fromEntries(OVERVIEW_KEYS.map((key) => [key, { text: overview[key], sids: [] }]));
+  await writeOverview(db, projectId, "student", fields);
+}
 
+/** 프로젝트 개요 행을 출처별로 한 줄씩 저장한다 (있으면 고침) */
+export async function writeOverview(db: Db, projectId: string, source: "ai" | "student", fields: object, inputRefs?: string[]) {
   const { data: existing, error } = await db
     .from("experiences")
     .select("id")
     .eq("project_id", projectId)
     .is("record_version_id", null)
-    .eq("source", "student")
+    .eq("source", source)
     .maybeSingle();
   if (error) throw new Error(error.message);
 
+  const row = { fields, ...(inputRefs && { input_refs: inputRefs }) };
   const result = existing
-    ? await db.from("experiences").update({ fields }).eq("id", existing.id)
-    : await db.from("experiences").insert({ project_id: projectId, fields, source: "student" });
+    ? await db.from("experiences").update(row).eq("id", existing.id)
+    : await db.from("experiences").insert({ project_id: projectId, source, ...row });
   if (result.error) throw new Error(result.error.message);
 }

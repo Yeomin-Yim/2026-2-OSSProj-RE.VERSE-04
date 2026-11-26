@@ -6,7 +6,7 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/server/auth";
-import { recomputeGraph } from "@/lib/server/graph";
+import { afterRecordsChanged } from "@/lib/server/keywords/refresh";
 import * as gcam from "@/lib/server/gcam-import/import";
 import type { Draft } from "@/lib/server/gcam-import/draft";
 
@@ -47,7 +47,7 @@ export async function confirmImport(id: string, draft: Draft) {
   });
   if (result.ok) {
     revalidatePath("/projects", "layout");
-    after(() => recomputeGraph(supabase).catch((e) => console.error("연결선 재계산 실패:", e)));
+    after(() => afterRecordsChanged(supabase));
   }
   return result;
 }

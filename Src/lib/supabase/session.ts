@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/"];
 
 /** 요청마다 로그인 세션을 갱신하고, 로그인하지 않았으면 /login 으로 보낸다. */
 export async function updateSession(request: NextRequest) {

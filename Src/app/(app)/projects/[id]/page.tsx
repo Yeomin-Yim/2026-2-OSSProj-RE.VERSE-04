@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { ProjectsView } from "@/components/projects/ProjectsView";
-import { checkProject, groupByCode, nextQuestions } from "@/lib/core/index.ts";
+import { checkProject, filterProjectRecords, groupByCode, nextQuestions } from "@/lib/core/index.ts";
 import { getDisplayName, requireUser } from "@/lib/server/auth";
 import { loadDictionary } from "@/lib/server/dictionary";
-import { getOverview, listProjects, listRecords } from "@/lib/server/projects";
+import { keywordCategories, matching, tagInfoFor } from "@/lib/server/keywords/meta";
+import { getAiOverview, getOverview, listProjects, listRecords } from "@/lib/server/projects";
 import { StudentProvider } from "@/components/student/StudentData";
 import { listGraphNotes } from "@/lib/server/student/notes";
 import { listScraps } from "@/lib/server/student/scraps";
@@ -18,16 +19,20 @@ export default async function ProjectPage({ params, searchParams }: {
   const { supabase } = await requireUser();
 
   // 서로 기다릴 필요가 없는 조회는 한꺼번에 보낸다
-  const [projects, records, overview, { dict }, userName, graphNotes, scraps, todos] = await Promise.all([
+  const [projects, allRecords, overview, aiOverview, { dict }, userName, graphNotes, scraps, todos, cats] = await Promise.all([
     listProjects(supabase),
     listRecords(supabase, id),
     getOverview(supabase, id),
+    getAiOverview(supabase, id),
     loadDictionary(supabase),
     getDisplayName(),
     listGraphNotes(supabase),
     listScraps(supabase),
     listTodos(supabase),
+    keywordCategories(supabase),
   ]);
+  // 자체 키워드가 만들어진 프로젝트는 키워드만, 아직이면 규칙 태그를 보여 준다
+  const records = filterProjectRecords(allRecords, matching());
 
   const project = projects.find((p) => p.id === id);
   if (!project) notFound();
@@ -38,9 +43,7 @@ export default async function ProjectPage({ params, searchParams }: {
     code,
     count: sids.length,
   }));
-  const tagInfo = Object.fromEntries(
-    Object.entries(dict.tags).map(([code, tag]) => [code, { label: tag.label, group: tag.group }]),
-  );
+  const tagInfo = tagInfoFor(new Set([...Object.keys(dict.tags), ...records.flatMap((r) => r.tags.map((t) => t.code))]), dict, cats);
 
   return (
     <StudentProvider initialScraps={scraps} initialTodos={todos}>
@@ -50,6 +53,7 @@ export default async function ProjectPage({ params, searchParams }: {
       project={project}
       records={records}
       overview={overview}
+      aiOverview={aiOverview}
       checks={checks}
       guides={nextQuestions(checks)}
       projectTags={projectTags}

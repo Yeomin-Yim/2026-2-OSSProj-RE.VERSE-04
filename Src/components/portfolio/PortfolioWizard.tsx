@@ -4,18 +4,18 @@
 //   1 유형 선택: 프로젝트 포트폴리오 / 학교생활기록부 대체서식
 //   2 경험 선택: 내 프로젝트(Supabase)와 기록 확인 7항목
 //   3 초안 편집: 왼쪽 문서 구성 · 가운데 편집 · 오른쪽 참고 기록 / 대체서식 표 · 미리보기 · 인쇄
-// AI 초안 생성은 서버에 아직 없다. 개요에 저장한 글을 그대로 옮겨 오고(문장을 만들지 않음), 학생이 직접 고친다.
+// 초안 만들기: 새로 담은 프로젝트마다 AI 초안(근거 문장이 있는 섹션만)을 받고, 비어 온 섹션은 개요의 글을 그대로 둔다. 학생이 고친다.
 // 편집 내용은 portfolios 표에 자동 저장되고, 저장 결과(저장 중 / 저장됨 / 저장 실패)를 그대로 보여 준다.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { savePortfolio } from "@/app/(app)/portfolio/actions";
+import { draftProject, savePortfolio } from "@/app/(app)/portfolio/actions";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
 import {
-  CHECK_LABEL, CHECK_ORDER, TEMPLATES, altRow, draftFromOverview, emptyAltRow, emptyDraft, emptyProfile, period, promptsFor, templateList, topTags,
+  CHECK_LABEL, CHECK_ORDER, PROJECT_SECTIONS, TEMPLATES, altRow, draftFromOverview, emptyAltRow, emptyDraft, emptyProfile, period, promptsFor, templateList, topTags,
   type AltRow, type CheckKey, type PortfolioSource, type ProfileDraft, type ProjectDraft, type TemplateId,
 } from "@/lib/core/index.ts";
 import type { ProjectRow } from "@/lib/server/projects";
@@ -56,6 +56,8 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
   const [preview, setPreview] = useState(false);
   const [viewRecord, setViewRecord] = useState<{ title: string; text: string } | null>(null);
   const [flash, setFlash] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [drafting, setDrafting] = useState(false);
 
   // ───── 주소의 ?step 을 맞춘다 (뒤로 가기 대신 단계 표시를 눌러 이동)
   const setStep = (s: Step) => {
@@ -136,6 +138,14 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
     );
   }
 
+  // ───── AI 초안: 근거가 없어 비어 온 섹션은 base 의 글을 그대로 둔다. 실패하면 이유(문자열)를 돌려준다
+  async function aiDraft(pid: string, base: ProjectDraft): Promise<ProjectDraft | string> {
+    if (!idRef.current) return "포트폴리오가 아직 저장되지 않았어요";
+    const r = await draftProject(idRef.current, pid);
+    if (!r.ok) return r.message;
+    return { problem: r.data.problem.text || base.problem, role: r.data.role.text || base.role, result: r.data.result.text || base.result };
+  }
+
   // ───── 2단계
   function toggle(pid: string) {
     setSelected((s) => (s.includes(pid) ? s.filter((x) => x !== pid) : [...s, pid]));
@@ -156,8 +166,25 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
     setOrder(nextOrder); setContent(nextContent); setAlt(nextAlt); setProfile(nextProfile); setBuilt(true);
     setCur(nextOrder.includes(cur) ? cur : nextOrder[0]);
     queue({ template_id: type, project_ids: nextOrder, content: nextContent, alt: nextAlt, profile: nextProfile, built_at: new Date().toISOString() });
-    const ok = await flush();
-    if (ok) { toast("편집을 시작해요 · 개요에 저장한 글을 옮겨 왔어요"); setStep(3); }
+    setBuilding(true);
+    try {
+      if (!(await flush())) return;
+      // 프로젝트 포트폴리오: 처음 담는 프로젝트만 AI 초안을 받는다 (이미 고친 글은 그대로)
+      const fresh = TEMPLATES[type].type === "portfolio" ? nextOrder.filter((pid) => !content[pid]) : [];
+      if (fresh.length) {
+        const results = await Promise.all(fresh.map((pid) => aiDraft(pid, nextContent[pid])));
+        const merged = { ...nextContent };
+        fresh.forEach((pid, i) => { const r = results[i]; if (typeof r !== "string") merged[pid] = r; });
+        const err = results.find((r): r is string => typeof r === "string");
+        setContent(merged); queue({ content: merged });
+        toast(err ? `AI 초안을 만들지 못한 프로젝트가 있어요 (${err}) · 개요의 글을 옮겼어요` : "AI 초안을 만들었어요 · 기록에 근거가 있는 내용만 담았어요");
+      } else {
+        toast("편집을 시작해요");
+      }
+      setStep(3);
+    } finally {
+      setBuilding(false);
+    }
   }
   function step2() {
     return (
@@ -191,8 +218,10 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
           </div>
         )}
         <div className="pf-foot">
-          <div className="msg"><span><b>{selected.length}개 선택</b><small>AI 초안 생성은 아직 연결 전이에요. 개요에 저장한 글을 그대로 옮겨 와 직접 고쳐요.</small></span></div>
-          <button className="btn primary" disabled={!selected.length || save === "saving"} onClick={build}><Icon name="pen" />편집 시작</button>
+          <div className="msg"><span><b>{selected.length}개 선택</b><small>{tpl.type === "altform" ? "활동명·기간을 프로젝트에서 가져와요. 활동내용은 직접 적어요." : "AI가 기록 문장을 근거로 초안을 써요. 기록에 없는 내용은 쓰지 않아요."}</small></span></div>
+          <button className="btn primary" disabled={!selected.length || save === "saving" || building} onClick={build}>
+            {building ? <><span className="spinner" />초안을 만드는 중…</> : tpl.type === "altform" ? <><Icon name="pen" />편집 시작</> : <><Icon name="sparkle" />초안 만들기</>}
+          </button>
         </div>
       </>
     );
@@ -216,6 +245,17 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
     setFlash(true); setTimeout(() => setFlash(false), 900);
     toast(`${pad(i + 1)} → ${pad(j + 1)}번으로 옮겼어요 · 미리보기 ${j + 2}쪽`);
   }
+  async function redraft(pid: string) {
+    const base = content[pid] ?? emptyDraft();
+    if (PROJECT_SECTIONS.some((k) => base[k].trim()) && !window.confirm("지금 쓴 글을 AI 초안으로 바꿀까요? 근거가 없는 섹션은 지금 글을 그대로 둬요.")) return;
+    setDrafting(true);
+    const r = await aiDraft(pid, base);
+    setDrafting(false);
+    if (typeof r === "string") return toast("AI 초안을 만들지 못했어요: " + r);
+    const next = { ...content, [pid]: r };
+    setContent(next); queue({ content: next });
+    toast("AI 초안으로 바꿨어요 · 기록과 다른 곳이 없는지 확인해 주세요");
+  }
   function fillFromOverview(pid: string, k: keyof ProjectDraft) {
     const v = draftFromOverview(sources[pid].overview)[k];
     if (!v) return toast("개요에 이 항목이 비어 있어요. 프로젝트 관리 → 개요에서 먼저 적어 주세요.");
@@ -227,10 +267,10 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
       {save === "saving" ? <><Icon name="refresh" /> 저장 중…</> : save === "error" ? <><Icon name="info" /> 저장 실패</> : <><Icon name="check" /> 저장됨</>}
     </span>
   );
-  function prompts(keys: [TemplateId, PortfolioSource[]][]) {
+  function prompts(keys: [TemplateId, PortfolioSource[]][], live = false) {
     return (
       <details className="prompt-box">
-        <summary>프롬프트 보기 · AI 를 연결하면 보낼 지시문 (지금은 AI 미연결)</summary>
+        <summary>{live ? "프롬프트 보기 · AI 초안에 쓰는 섹션별 지시문" : "프롬프트 보기 · AI 를 연결하면 보낼 지시문 (지금은 AI 미연결)"}</summary>
         {keys.flatMap(([t, ps]) => Object.values(promptsFor(t, ps)).map((txt, i) => <pre key={t + i}>{txt}</pre>))}
       </details>
     );
@@ -321,7 +361,12 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
           <div className={"card panel edit-card" + (flash ? " flash" : "")}>
             <h3 className="edit-title"><span className="ord-no">{pad(pos + 1)}</span>{s.title}</h3>
             <div className="edit-meta">{period(s)}{s.overview.activity ? " · " + s.overview.activity : ""} · <b className="ord-pos">포트폴리오 {pos + 2}쪽 · {pos + 1}/{order.length}번째 프로젝트</b></div>
-            <Notice type="noai" />
+            <Notice type="ai" extra="초안은 기록 문장을 근거로 썼고, 근거가 없는 섹션은 비워 둬요." />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+              <button className="btn sm" disabled={drafting} onClick={() => redraft(cur)}>
+                {drafting ? <><span className="spinner" />초안을 만드는 중…</> : <><Icon name="sparkle" />AI 초안 다시 만들기</>}
+              </button>
+            </div>
             {secs.map((sec) => {
               const k = sec.key as keyof ProjectDraft, v = d[k] ?? "";
               return (
@@ -337,7 +382,7 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
                 </div>
               );
             })}
-            {prompts([["portfolio-project", [s]]])}
+            {prompts([["portfolio-project", [s]]], true)}
           </div>
           <div className="col-right"><div className="card panel">
             <div className="right-title" style={{ color: "var(--text)" }}><Icon name="rewrite" /> 문장 다듬기 <span className="badge-ai">AI 미연결</span></div>
@@ -431,7 +476,7 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
           {tpl.type === "altform"
             ? <AltSheet alt={alt} name={userName} edit={false} />
             : <PortfolioSheet name={userName} profile={prof} order={order} sources={sources} content={content} />}
-          <p className="no-print" style={{ fontSize: 11, color: "#555", margin: "10px 0" }}>※ {tpl.type === "altform" ? "대체서식은 참고용입니다. 제출 전 해당 대학의 공식 서식·유의사항을 직접 확인하세요." : "AI 를 쓰지 않고 내가 작성한 내용이에요. 제출 전 한 번 더 읽어 보세요."}</p>
+          <p className="no-print" style={{ fontSize: 11, color: "#555", margin: "10px 0" }}>※ {tpl.type === "altform" ? "대체서식은 참고용입니다. 제출 전 해당 대학의 공식 서식·유의사항을 직접 확인하세요." : "AI 초안을 바탕으로 내가 고친 내용이에요. 기록과 다른 곳이 없는지 제출 전 한 번 더 읽어 보세요."}</p>
           <div className="modal-actions no-print">
             <button className="btn" onClick={() => setPreview(false)}>닫기</button>
             <button className="btn primary" onClick={printNow}><Icon name="printer" /> 인쇄 / PDF 저장</button>

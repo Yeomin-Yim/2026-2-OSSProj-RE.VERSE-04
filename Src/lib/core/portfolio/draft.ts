@@ -1,9 +1,9 @@
 // 포트폴리오 작성 도우미 (AI 아님).
-// 실제 AI 초안 생성은 아직 서버에 없다. 그래서 여기서는 "학생이 이미 저장한 값"을 칸에 그대로 옮겨 주기만 한다.
+// AI 초안은 서버(lib/server/student/portfolio-ai.ts)가 만든다. 여기서는 "학생이 이미 저장한 값"을 칸에 그대로 옮겨 주기만 한다.
 //   - 프로젝트 3섹션: 개요 6항목의 글을 고치지 않고 그대로 붙인다 (문장을 새로 만들지 않음)
 //   - 대체서식 행: 프로젝트 이름과 기간만 채운다 (활동내용은 학생이 직접)
 //   - 프로필: 기록에서 찾은 태그 이름만 스킬 칸에 넣는다
-// buildPrompt 는 AI 를 붙일 때 보낼 지시문이다. 화면의 "프롬프트 보기"로 확인할 수 있다.
+// buildPrompt 는 화면의 "프롬프트 보기"에 보여 주는 섹션별 지시문이다.
 
 import { TEMPLATES, type Template, type TemplateId, type TemplateSection } from "./templates.ts";
 

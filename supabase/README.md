@@ -29,6 +29,23 @@ Supabase 대시보드 → **SQL Editor**에서 `migrations/` 파일을 **번호 
 
 확인: projects 5줄, records 25줄, experiences 30줄, analysis_runs 1줄.
 
+## 점수표 · 대학 목록 넣기
+
+1. 점수표 검토 시트(`profiles` 시트)를 **CSV UTF-8**로 저장 → `profiles.csv`. 첫 줄 제목은 시트 그대로 둔다
+   (`code`, `name`, `구분`, `원문 링크`, `원문 발췌`, `태그코드:중요도`, `맞은 구절`, `사전 버전`, `수집일`, `메모`, `profile_version`, `검토 상태` …).
+2. 대학 목록은 첫 줄이 `major_code,name,campus,area,url,fetched_at`인 CSV로 저장 → `universities.csv`.
+   `major_code`는 점수표의 학과 `code`, `name`은 대학 이름. 나머지는 비워도 된다.
+3. `Src` 폴더에서 실행:
+   ```bash
+   node --experimental-strip-types ../supabase/seed/build_profiles.ts profiles.csv universities.csv
+   ```
+   → `seed/profiles.sql`이 생긴다. SQL Editor에 붙여 넣고 Run.
+
+- `검토 상태`에 "초안"이 들어간 줄은 넣지 않는다. 시험으로 넣어 보려면 `--draft`.
+- `profile_version`이 빈 줄이 있으면 `--version 2026-12-01`처럼 지정한다. 같은 `code`·버전이면 덮어쓴다.
+- 태그 코드가 사전(v0.5)에 없거나 중요도가 1~3이 아니면 SQL을 만들지 않고 고칠 곳을 알려 준다.
+- 대학 목록은 이번에 넣는 학과의 기존 목록을 지우고 다시 넣는다.
+
 ## 표 구조
 
 ```

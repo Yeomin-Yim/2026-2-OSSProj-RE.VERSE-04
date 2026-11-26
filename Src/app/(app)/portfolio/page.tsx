@@ -1,7 +1,8 @@
 import { PortfolioWizard, type PickProject } from "@/components/portfolio/PortfolioWizard";
-import { checkProject, isTemplateId, type PortfolioSource } from "@/lib/core/index.ts";
+import { checkProject, filterProjectRecords, isTemplateId, type PortfolioSource } from "@/lib/core/index.ts";
 import { getDisplayName, requireUser } from "@/lib/server/auth";
 import { loadDictionary } from "@/lib/server/dictionary";
+import { matching, tagLabel } from "@/lib/server/keywords/meta";
 import { listProjects, listRecords } from "@/lib/server/projects";
 import { getPortfolio, listOverviews } from "@/lib/server/student/portfolio";
 
@@ -28,7 +29,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const picks: PickProject[] = projects.map((p) => {
     const mine = records.filter((r) => r.project_id === p.id);
     const count = new Map<string, number>();
-    for (const r of mine) for (const t of r.tags) count.set(t.code, (count.get(t.code) ?? 0) + 1);
+    for (const r of filterProjectRecords(mine, matching())) for (const t of r.tags) count.set(t.code, (count.get(t.code) ?? 0) + 1);
     const source: PortfolioSource = {
       id: p.id,
       title: p.title,
@@ -37,7 +38,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
       end_date: p.end_date,
       overview: overviews[p.id] ?? {},
       records: [...mine].reverse().map((r) => ({ id: r.id, title: r.title, text: r.raw_text })),
-      tags: [...count].sort((a, b) => b[1] - a[1]).map(([code]) => dict.tags[code]?.label ?? code),
+      tags: [...count].sort((a, b) => b[1] - a[1]).map(([code]) => tagLabel(code, dict)),
     };
     return { ...p, checks: checkProject({ start_date: p.start_date, end_date: p.end_date, records: mine }), source };
   });

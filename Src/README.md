@@ -105,6 +105,8 @@ Src/
 | 화면 · 기능 | 상태 | 데이터 · 서버 기능 |
 |---|---|---|
 | 프로젝트 관리 (목록 · 탭 · 보완 제안 · 기록 확인) | 실제 연결 | `projects` `records` `experiences` |
+| 개요 탭 AI 정리 (6항목 · 근거 문장 확인 · 고쳐서 저장) | 실제 연결 | `generateOverview` · `lib/server/projects/overview-ai.ts`. AI 결과는 `experiences`(source=ai), 학생이 저장한 글은 source=student |
+| 회원가입 · 가입 확인 메일 | 실제 연결 | `/signup` · `/auth/confirm` |
 | 파일 올리기 (PDF·DOCX·사진) · 원본 파일 보기 | 실제 연결 | `prepareFile` `addFile` `openFile` · `lib/server/projects/README.md` |
 | 거캠 회고록 가져오기 | 실제 연결 | `importActions.ts` · `lib/server/gcam-import/README.md` |
 | 노트 옮기기 | 실제 연결 | `moveRecord` |
@@ -116,30 +118,31 @@ Src/
 | 진로 탐색 > 채용공고 | **서버 기능 필요** | 표·수집 기능 없음 → 안내만. 예시는 시연 모드에서만 |
 | 스크랩 (필터 · 메모 · 체크리스트 · 원래 위치로 이동) | 실제 연결 | `scraps` `todos`. 채용공고 탭은 빈 상태 |
 | 포트폴리오 1~3단계 · 미리보기 · 인쇄 · 자동 저장 | 실제 연결 | `portfolios` (template_id · project_ids · content · profile · alt · built_at) |
-| 포트폴리오 AI 초안 · 문장 다듬기 | **서버 기능 필요** | 버튼은 "AI 미연결"로 비활성. 지금은 개요의 글을 그대로 옮기고 직접 고친다 |
+| 포트폴리오 AI 초안 (2단계 "초안 만들기" · 3단계 "AI 초안 다시 만들기") | 실제 연결 | `draftProject` · `lib/server/student/portfolio-ai.ts`. 원본은 `portfolios.draft`, 고친 글은 `content` |
+| 포트폴리오 문장 다듬기 · 프로필 · 대체서식 AI | **서버 기능 필요** | 버튼은 "AI 미연결"로 비활성 |
 | 시연 모드 (`/graph?demo=1`) | 예시 데이터만 | `components/explore/demo.ts`. 띠로 구분, 스크랩·체크리스트 저장 안 함 |
 
 ## 서버 기능이 더 필요한 것 (화면은 준비됨)
 
 1. **학과·직무 점수표 · 대학 목록 수집** — `major_profiles` `job_profiles` (`weights = {태그코드: 1~3}`), `universities` (`major_code`).
+   넣는 방법은 `supabase/README.md`의 "점수표 · 대학 목록 넣기".
    들어오면 화면 수정 없이 `lib/server/explore/explore.ts`의 `loadExplore`가 추천을 계산해 보여 준다. 계산 결과를 `analysis_runs`(purpose=college|career)에 남기려면 같은 파일에서 저장만 추가한다.
 2. **채용공고** — 표 예: `job_postings(id, job_code, company, title, location, deadline, requirements text[], preferred text[], summary, url, fetched_at)`.
    화면은 `ExNode.posting` 모양을 쓴다 (`loadExplore`의 `career.next[직무 id]`에 `kind: "posting"` 노드로 넣으면 된다).
    스크랩하려면 `scraps.type` check 에 `'posting'`을 더하는 마이그레이션이 필요하다 (지금은 `major·job·university·note·project`만 허용).
-3. **AI 초안 · 문장 다듬기** — 입력·지시문은 `lib/core/portfolio/draft.ts`의 `buildPrompt`가 이미 만든다 ("프롬프트 보기").
-   서버 액션 계약 예: `generateDraft(projectId) → { problem, role, result }` (각 `{ text, sids }`, `portfolios.draft`에 저장),
-   `refineText(mode: 'concise'|'role'|'rewrite', text) → { text, changed }`. 연결되면 `PortfolioWizard`의 비활성 버튼만 켠다.
+3. **문장 다듬기** — 서버 액션 계약 예: `refineText(mode: 'concise'|'role'|'rewrite', text) → { text, changed }`. 연결되면 `PortfolioWizard`의 비활성 버튼만 켠다.
+
+AI 글의 근거 검증은 `lib/core/evidence.ts` 하나로 한다: AI에게 `[문장ID] 문장`으로 기록을 보내고, 돌아온 문장 ID 중 실제로 보낸 것만 남기며, 근거가 하나도 없는 글은 비운다.
 
 ## 아직 없는 것
 
-- 회원가입 화면 (지금은 Supabase 대시보드에서 사용자를 만듭니다)
 - 태그 수정, 위쪽 바의 노트 검색·알림 (프로토타입에는 있음)
 
 ## 배포 (Vercel)
 
 1. Vercel에서 저장소를 가져올 때 **Root Directory =** `Src`
 2. Environment Variables에 `Src/.env.example`의 항목 등록
-3. Supabase → Authentication → URL Configuration의 Site URL에 배포 주소 입력
+3. Supabase → Authentication → URL Configuration의 Site URL에 배포 주소 입력, Redirect URLs에 `https://배포주소/auth/confirm` 추가 (가입 확인 메일이 돌아오는 곳)
 
 ### (Vercel 로그인 필요)
 

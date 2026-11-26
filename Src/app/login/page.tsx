@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { Logo } from "@/components/ui/Icon";
 import { login } from "./actions";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
+  const { error, notice } = await searchParams;
 
   return (
     <div className="login-wrap">
@@ -19,8 +20,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <label htmlFor="password">비밀번호</label>
           <input id="password" name="password" type="password" required />
         </div>
+        {notice && <p className="login-notice">{notice}</p>}
         {error && <p className="login-error">{error}</p>}
         <button className="btn primary">로그인</button>
+        <p className="login-alt">처음이신가요? <Link href="/signup">회원가입</Link></p>
       </form>
     </div>
   );

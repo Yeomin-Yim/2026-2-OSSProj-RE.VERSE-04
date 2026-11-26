@@ -8,6 +8,9 @@
 .login-card .logo{padding:0 0 18px}
 .login-card .btn{width:100%;margin-top:4px}
 .login-error{color:var(--danger);font-size:12px;margin:0 0 10px}
+.login-notice{color:var(--primary);font-size:12px;margin:0 0 10px}
+.login-alt{margin:14px 0 0;text-align:center;font-size:12px;color:var(--sub)}
+.login-alt a{color:var(--primary);font-weight:600}
 
 /* 사용자 메뉴 · 처리 중 표시 */
 .btn:disabled{opacity:.6;cursor:default}
@@ -23,6 +26,13 @@
 .tag-chip.tool{background:var(--yellow-soft);color:var(--navy)}
 .tag-chip small{margin-left:4px;font-weight:500;opacity:.7}
 .sub-title{margin:20px 0 10px;font-size:13px}
+
+/* 개요 탭: AI 정리 제안과 근거 문장 */
+.ai-pick{margin-top:6px;border:1px solid var(--lav-line);border-radius:8px;background:#F7F9FD;padding:8px 10px;font-size:12px;line-height:1.55}
+.ai-pick-row{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;margin-bottom:6px}
+.ai-pick-row .btn{flex:none}
+.ai-pick summary{cursor:pointer;font-size:11px;font-weight:700;color:var(--sub)}
+.ai-pick .sent-list{margin-top:6px}
 
 /* 연결 그래프(목록 형태) */
 .rel-row{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}

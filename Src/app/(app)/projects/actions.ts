@@ -7,10 +7,11 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { CHECK_LABEL, type CheckKey } from "@/lib/core/index.ts";
 import { requireUser, type Db } from "@/lib/server/auth";
-import { recomputeGraph } from "@/lib/server/graph";
+import { afterRecordsChanged } from "@/lib/server/keywords/refresh";
 import * as projects from "@/lib/server/projects";
 import * as records from "@/lib/server/projects/records";
 import * as files from "@/lib/server/projects/files";
+import * as overviewAi from "@/lib/server/projects/overview-ai";
 import type { ActionResult } from "@/components/ui/Toast";
 
 /** 공통 처리: 로그인 확인 → 실행 → 화면 갱신. 실패하면 이유를 message 로 돌려준다. */
@@ -22,9 +23,9 @@ async function run(
   try {
     const result = await work(supabase);
     revalidatePath("/projects", "layout");
-    // 연결선 재계산은 응답을 보낸 뒤에 한다 (저장이 기다리지 않도록)
+    // 키워드 갱신·연결선 재계산은 응답을 보낸 뒤에 한다 (저장이 기다리지 않도록)
     if (options.regraph) {
-      after(() => recomputeGraph(supabase).catch((e) => console.error("연결선 재계산 실패:", e)));
+      after(() => afterRecordsChanged(supabase));
     }
     return { ok: true, ...result };
   } catch (e) {
@@ -59,6 +60,14 @@ export async function saveOverview(projectId: string, overview: projects.Overvie
   return run(async (db) => {
     await projects.saveOverview(db, projectId, overview);
     return { message: "개요를 저장했어요" };
+  });
+}
+
+/** AI 개요 6항목 만들기. 결과는 AI 행에만 저장하고, 학생이 고른 글만 개요로 저장된다 */
+export async function generateOverview(projectId: string) {
+  return run(async (db) => {
+    const filled = await overviewAi.generateOverview(db, projectId);
+    return { message: filled ? `AI가 ${filled}개 항목을 정리했어요 · 근거를 확인하고 골라 주세요` : "기록에서 정리할 내용을 찾지 못했어요" };
   });
 }
 

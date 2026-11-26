@@ -1,5 +1,6 @@
 import type { AltRow, ProfileDraft, ProjectDraft, TemplateId } from "@/lib/core/index.ts";
 import type { Db } from "../auth";
+import { pickOverview } from "../projects/projects";
 
 /**
  * 포트폴리오 (portfolios 표). 학생 한 명이 지금은 한 줄만 쓴다 (가장 최근 것).
@@ -8,7 +9,7 @@ import type { Db } from "../auth";
  *   content     : 학생이 쓴 프로젝트별 3섹션 {project_id: {problem, role, result}}
  *   profile     : 1쪽 프로필 · 마지막 쪽 자기소개
  *   alt         : 대체서식 {rows, head, oath, checklist}
- *   draft       : AI 초안 자리 (AI 미연결이라 비어 있음)
+ *   draft       : AI 초안 원본 {project_id: {problem:{text,sids}, role, result}} (portfolio-ai.ts)
  */
 export interface AltForm { rows: AltRow[]; head: { track: string; unit: string }; oath: boolean; checklist: boolean[] }
 
@@ -71,12 +72,6 @@ export async function savePortfolio(db: Db, id: string | null, patch: PortfolioP
 export async function listOverviews(db: Db): Promise<Record<string, Record<string, string>>> {
   const { data, error } = await db.from("experiences").select("project_id, fields, source").is("record_version_id", null);
   if (error) throw new Error(error.message);
-  const out: Record<string, Record<string, string>> = {};
-  const rank = (s: string) => (s === "student" ? 2 : s === "ai" ? 1 : 0);
-  const sorted = [...(data as { project_id: string; fields: Record<string, { text?: string }>; source: string }[])].sort((a, b) => rank(a.source) - rank(b.source));
-  for (const row of sorted) {
-    const cur = (out[row.project_id] ??= {});
-    for (const [k, v] of Object.entries(row.fields ?? {})) if (v?.text) cur[k] = v.text;
-  }
-  return out;
+  const byProject = Map.groupBy(data, (row) => row.project_id as string);
+  return Object.fromEntries([...byProject].map(([pid, rows]) => [pid, pickOverview(rows)]));
 }

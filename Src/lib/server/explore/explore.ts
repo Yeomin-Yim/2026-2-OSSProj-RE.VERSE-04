@@ -1,9 +1,11 @@
-import { scoreProfiles, type ProjectTags, type Profile, type RuleDict } from "@/lib/core/index.ts";
+import { forRecommend, MIN_TOTAL, profileWeights, scoreProfiles, type ProjectTags, type Profile, type RuleDict } from "@/lib/core/index.ts";
 import type { Db } from "../auth";
+import { matching, tagLabel } from "../keywords/meta";
 
 /**
  * 진로 탐색 그래프에 쓰는 실제 추천 데이터.
  *   학과: major_profiles 점수표 × 내 프로젝트 태그 → scoreProfiles (lib/core/recommend)
+ *         내 기록의 공통 축(A:…, 키워드에 의미로 붙인 것) 또는 규칙 태그와 점수표의 축 코드를 맞춘다 (lib/core/keywords/vocabulary)
  *   대학: universities (학과 코드별 개설 대학, 점수 없음)
  *   직무: job_profiles 점수표 × 내 프로젝트 태그 → scoreProfiles
  *   채용공고: 아직 표·수집 기능이 없다 → 항상 빈 목록
@@ -71,6 +73,7 @@ function side(
   rows: ProfileRow[],
   projectTags: ProjectTags[],
   dict: RuleDict,
+  via: Map<string, string[]> = new Map(),
   max = 5,
 ): { side: ExploreSide; picked: ProfileRow[] } {
   const root = { ...ROOTS[kind], evidence: projectTags.map((p) => p.id) };
@@ -79,9 +82,10 @@ function side(
   if (!profiles.length) return { side: { ...base, children: [], status: "no-profiles" }, picked: [] };
   if (!projectTags.some((p) => p.tags.size)) return { side: { ...base, children: [], status: "no-records" }, picked: [] };
 
-  const recs = scoreProfiles(projectTags, profiles.map<Profile>((p) => ({ id: p.id, weights: p.weights ?? {} }))).slice(0, max);
+  const recs = scoreProfiles(projectTags, profiles.map<Profile>((p) => ({ id: p.id, weights: profileWeights(p.weights) })), { minTotal: MIN_TOTAL }).slice(0, max);
   const byId = new Map(profiles.map((p) => [p.id, p]));
-  const label = (code: string) => dict.tags[code]?.label ?? code;
+  // 축 칸은 그 축을 붙게 한 내 키워드를 함께 보여 준다 ("설문·표본 조사 ← 설문 문항, 인터뷰")
+  const label = (code: string) => tagLabel(code, dict) + (via.get(code)?.length ? ` ← ${via.get(code)!.slice(0, 2).join(", ")}` : "");
   const prefix = kind === "college" ? "m:" : "j:";
   const children = recs.map<ExNode>((r) => {
     const p = byId.get(r.profile_id)!;
@@ -109,7 +113,10 @@ function side(
   };
 }
 
-export async function loadExplore(db: Db, projectTags: ProjectTags[], dict: RuleDict): Promise<ExploreData> {
+/**
+ * axisSources: 축 코드 → 그 축을 붙게 한 내 키워드 이름들 (화면에 "설문·표본 조사 ← 설문 문항" 처럼 근거를 보여 준다)
+ */
+export async function loadExplore(db: Db, projectTags: ProjectTags[], dict: RuleDict, axisSources: Map<string, string[]> = new Map()): Promise<ExploreData> {
   const cols = "id, code, name, weights, profile_version";
   const [majors, jobs] = await Promise.all([
     db.from("major_profiles").select(cols),
@@ -118,8 +125,11 @@ export async function loadExplore(db: Db, projectTags: ProjectTags[], dict: Rule
   if (majors.error) throw new Error(majors.error.message);
   if (jobs.error) throw new Error(jobs.error.message);
 
-  const college = side("college", majors.data as ProfileRow[], projectTags, dict);
-  const career = side("career", jobs.data as ProfileRow[], projectTags, dict);
+  const majorRows = latest(majors.data as ProfileRow[]);
+  const jobRows = latest(jobs.data as ProfileRow[]);
+  const mine = forRecommend(projectTags, matching());
+  const college = side("college", majorRows, mine, dict, axisSources);
+  const career = side("career", jobRows, mine, dict, axisSources);
 
   // 추천 학과의 개설 대학
   const codes = college.picked.map((p) => p.code);

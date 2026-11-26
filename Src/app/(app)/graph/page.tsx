@@ -7,6 +7,8 @@ import { StudentProvider } from "@/components/student/StudentData";
 import { requireUser } from "@/lib/server/auth";
 import { loadDictionary } from "@/lib/server/dictionary";
 import { loadExplore } from "@/lib/server/explore/explore";
+import { keywordCategories, tagInfoFor } from "@/lib/server/keywords/meta";
+import { axisOf, isAxisCode } from "@/lib/core/index.ts";
 import { latestRelations } from "@/lib/server/graph";
 import { listProjects, listRecords, toProjectTags } from "@/lib/server/projects";
 import { listGraphNotes } from "@/lib/server/student/notes";
@@ -39,7 +41,7 @@ export default async function GraphPage({ searchParams }: { searchParams: Promis
             : "노드를 눌러 탐색하고, 내 프로젝트에 노트를 연결해요."}
         </p>
       </div>
-      {view === "explore" && <span className="sample-badge">{demo ? "시연 모드 · 예시 데이터" : "추천 = 점수표 × 내 기록 태그"}</span>}
+      {view === "explore" && <span className="sample-badge">{demo ? "시연 모드 · 예시 데이터" : "추천 = 점수표 × 내 기록 키워드"}</span>}
     </div>
   );
   const tabs = (
@@ -51,11 +53,8 @@ export default async function GraphPage({ searchParams }: { searchParams: Promis
 
   if (view === "links") {
     const { dict } = await loadDictionary(supabase);
-    const [projects, { relations, threshold }] = await Promise.all([listProjects(supabase), latestRelations(supabase)]);
-    const codes = new Set(relations.flatMap((r) => r.shared));
-    const tagInfo = Object.fromEntries(
-      [...codes].filter((code) => dict.tags[code]).map((code) => [code, { label: dict.tags[code].label, group: dict.tags[code].group }]),
-    );
+    const [projects, { relations, threshold }, cats] = await Promise.all([listProjects(supabase), latestRelations(supabase), keywordCategories(supabase)]);
+    const tagInfo = tagInfoFor(new Set(relations.flatMap((r) => r.shared)), dict, cats);
     return (
       <div className="page lm">
         {head}
@@ -82,9 +81,17 @@ export default async function GraphPage({ searchParams }: { searchParams: Promis
     listTodos(supabase),
     supabase.from("profiles").select("ui_state").eq("id", userId).maybeSingle(),
   ]);
+  // 축 → 그 축을 붙게 한 내 키워드 이름 (추천 근거 표시용)
+  const axisSources = new Map<string, string[]>();
+  for (const t of records.flatMap((r) => r.tags)) {
+    if (!isAxisCode(t.code)) continue;
+    const list = axisSources.get(axisOf(t.code)) ?? [];
+    if (!list.includes(t.matched)) list.push(t.matched);
+    axisSources.set(axisOf(t.code), list);
+  }
   const data = demo
     ? buildDemoExplore(projects)
-    : await loadExplore(supabase, toProjectTags(records).filter((p) => projects.some((q) => q.id === p.id)), dict);
+    : await loadExplore(supabase, toProjectTags(records).filter((p) => projects.some((q) => q.id === p.id)), dict, axisSources);
 
   // 처음 위치: 주소(스크랩에서 이동) > 저장된 마지막 위치 (시연 모드는 항상 처음부터)
   const saved = (profile.data?.ui_state?.career ?? {}) as Partial<ExplorePlace>;

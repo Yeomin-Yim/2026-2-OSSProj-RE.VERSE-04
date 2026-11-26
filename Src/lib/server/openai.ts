@@ -62,3 +62,35 @@ export async function callJson<T>(
     };
   }
 }
+
+export const EMBED_MODEL = process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small";
+/** 임베딩 크기. 바꾸면 저장된 임베딩(keywords, keyword_aliases)을 모두 다시 만들어야 한다 */
+export const EMBED_DIMENSIONS = Number(process.env.OPENAI_EMBED_DIMENSIONS || 512);
+
+/** 여러 글을 한 번에 임베딩한다 (키워드 파이프라인). 네트워크·5xx 오류는 한 번 다시 시도한다. */
+export async function embedTexts(texts: string[]): Promise<{ vectors: number[][]; tokens: number }> {
+  if (!texts.length) return { vectors: [], tokens: 0 };
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("OPENAI_API_KEY 가 설정되지 않았어요.");
+
+  const vectors: number[][] = [];
+  let tokens = 0;
+  for (let i = 0; i < texts.length; i += 500) {
+    const input = texts.slice(i, i + 500).map((t) => t.trim() || " ");
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch("https://api.openai.com/v1/embeddings", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: EMBED_MODEL, input, dimensions: EMBED_DIMENSIONS }),
+      });
+      if (res.status >= 500 && attempt === 0) continue;
+      const body = await res.json();
+      if (!res.ok) throw new Error(`OpenAI 임베딩 오류 (${res.status}): ${body.error?.message ?? "알 수 없음"}`);
+      const rows = [...body.data].sort((a: { index: number }, b: { index: number }) => a.index - b.index);
+      for (const r of rows) vectors.push(r.embedding as number[]);
+      tokens += body.usage?.total_tokens ?? 0;
+      break;
+    }
+  }
+  return { vectors, tokens };
+}

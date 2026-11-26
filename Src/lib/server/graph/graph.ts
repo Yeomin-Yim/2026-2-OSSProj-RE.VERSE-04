@@ -1,13 +1,15 @@
-import { computeRelations, THRESHOLD, type Relation } from "@/lib/core/index.ts";
+import { computeRelations, forGraph, THRESHOLD, type Relation } from "@/lib/core/index.ts";
 import type { Db } from "../auth";
 import { loadDictionary } from "../dictionary";
 import { listRecords, toProjectTags } from "../projects";
+import { keywordCategories, matching, tagGroup } from "../keywords/meta";
 
 /** 프로젝트 연결선을 다시 계산해 analysis_runs 에 새 줄로 남긴다. 기록이나 태그가 바뀔 때 부른다. */
 export async function recomputeGraph(db: Db) {
-  const { dict, tagger } = await loadDictionary(db);
-  const records = await listRecords(db);
-  const relations = computeRelations(toProjectTags(records), tagger.groupOf);
+  const [{ dict }, records, cats] = await Promise.all([loadDictionary(db), listRecords(db), keywordCategories(db)]);
+  // 키워드가 있는 프로젝트는 키워드 + 공통 축으로, 없으면 규칙 태그로 (RECORD_MATCHING)
+  const projects = forGraph(toProjectTags(records), matching());
+  const relations = computeRelations(projects, (code) => tagGroup(code, dict, cats));
 
   const { error } = await db.from("analysis_runs").insert({
     purpose: "graph",

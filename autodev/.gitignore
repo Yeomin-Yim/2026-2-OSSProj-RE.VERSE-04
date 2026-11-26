@@ -1,0 +1,4 @@
+log/*.json
+log/*-test.txt
+shots/
+STOP
