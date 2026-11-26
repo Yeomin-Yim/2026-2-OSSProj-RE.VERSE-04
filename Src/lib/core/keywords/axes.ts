@@ -47,7 +47,22 @@ export function buildAxes(dict: RuleDict): Axis[] {
   return [...fromDict, ...extra];
 }
 
-export interface AxisVec { code: string; label: string; vector: Vec }
+export interface AxisVec {
+  code: string;
+  label: string;
+  vector: Vec;
+  /** 축 설명 (이름: 예시 말). AI 프롬프트의 축 목록에 쓴다 */
+  text?: string;
+}
+
+/**
+ * 축 후보 = 사전 예시 힌트(앞) + 임베딩 상위 k 개. 힌트는 규칙 사전의 예시 말이 키워드에 들어 있는 축이다
+ * (예: "다회용컵" ← 환경·기후·생태 의 예시 "다회용"). 정규식으로 확정하지 않고 AI 에 ★ 로 알려 주기만 한다.
+ */
+export function axisCandidates(v: Vec, axes: AxisVec[], hints: string[], k = 5, max = 7): string[] {
+  const known = new Set(axes.map((a) => a.code));
+  return [...new Set([...hints.filter((h) => known.has(h)), ...proposeAxes(v, axes, k).map((a) => a.code)])].slice(0, max);
+}
 
 /** 키워드에 어울리는 축 후보 (임베딩 유사도 순). AI 에 보여 줄 후보를 고르는 데 쓴다 */
 export function proposeAxes(v: Vec, axes: AxisVec[], k = 5, min = 0.2): { code: string; label: string; sim: number }[] {

@@ -92,7 +92,7 @@ export interface AliasMemo {
 export interface Nearest { keyword: DictKeyword; sim: number }
 
 export type Verdict =
-  | { kind: "known"; cand: Scored; keyword: DictKeyword; how: "alias" | "embedding"; sim?: number }
+  | { kind: "known"; cand: Scored; keyword: DictKeyword; how: "alias" | "exact" | "embedding"; sim?: number }
   | { kind: "drop"; cand: Scored; how: "alias" | "stopword" }
   | { kind: "ambiguous"; cand: Scored; nearest: Nearest[] };
 
@@ -118,6 +118,8 @@ export function screen(
   p: { sameAs: number; nearestK: number; nearestMin: number } = PARAMS,
 ): Verdict[] {
   const byId = new Map(dict.map((k) => [k.id, k]));
+  const squash = (s: string) => s.toLowerCase().replace(/\s+/g, "");
+  const byName = new Map(dict.map((k) => [squash(k.canonical), k]));
   return picked.map<Verdict>((cand) => {
     const memo = aliases.get(cand.surface);
     if (memo?.context_free && memo.decision === "stop") return { kind: "drop", cand, how: "alias" };
@@ -125,6 +127,9 @@ export function screen(
       return { kind: "known", cand, keyword: byId.get(memo.keyword_id)!, how: "alias" };
     }
     if (STOPWORDS.has(cand.surface)) return { kind: "drop", cand, how: "stopword" };
+    // 사전 대표 이름과 띄어쓰기·대소문자만 다르면 같은 키워드 ("모바일애플리케이션" = "모바일 애플리케이션")
+    const exact = byName.get(squash(cand.surface));
+    if (exact) return { kind: "known", cand, keyword: exact, how: "exact" };
 
     const nearest = nearestKeywords(cand.vector, dict, p.nearestK, p.nearestMin);
     if (nearest[0] && nearest[0].sim >= p.sameAs) {

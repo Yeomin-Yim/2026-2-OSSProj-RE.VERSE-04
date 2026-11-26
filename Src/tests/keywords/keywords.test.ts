@@ -380,3 +380,20 @@ test("파이프라인: AI 가 고른 축이 키워드에 저장되고, 다음 �
   assert.equal(calls.length, 1);
   assert.deepEqual(second.keywords.find((k) => k.canonical === "급식 잔반")?.axes, ["D17"]);
 });
+
+test("거름망: 사전 대표 이름과 띄어쓰기만 다르면 AI 없이 같은 키워드", () => {
+  const dict: DictKeyword[] = [{ id: 1, canonical: "모바일 애플리케이션", category: "output", vector: unit(1, 0) }];
+  const v = screen([scored("모바일애플리케이션", unit(0, 1))], new Map(), dict);
+  assert.equal(v[0].kind, "known");
+  assert.equal(v[0].kind === "known" && v[0].how, "exact");
+});
+
+test("축 후보: 사전 예시 힌트를 앞에 두고 임베딩 상위로 채운다", async () => {
+  const { axisCandidates } = await import("../../lib/core/index.ts");
+  const axes = [
+    { code: "D03", label: "환경", vector: unit(0, 1) },
+    { code: "D09", label: "청소년 서비스", vector: unit(1, 0) },
+    { code: "M03", label: "사용자 조사", vector: unit(0.9, 0.1) },
+  ];
+  assert.deepEqual(axisCandidates(unit(1, 0), axes, ["D03", "X99"], 2), ["D03", "D09", "M03"]);
+});

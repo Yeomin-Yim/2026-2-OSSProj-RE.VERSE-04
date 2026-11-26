@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { axisWeights, IMPORTANCE_WEIGHT, PIPELINE_VERSION } from "../lib/core/keywords/index.ts";
 import type { RuleDict } from "../lib/core/types.ts";
-import { loadAxisVectors } from "../lib/server/keywords/axes.ts";
+import { loadAxisVectors, ruleAxisHints } from "../lib/server/keywords/axes.ts";
 import { toSentences } from "../lib/core/sentences.ts";
 import { embedTexts } from "../lib/server/openai.ts";
 import { JUDGE_VERSION, judgeWithOpenAI } from "../lib/server/keywords/judge.ts";
@@ -48,7 +48,7 @@ const db = createClient(url, key, { auth: { persistSession: false } });
 const { data: dictRow, error: dictError } = await db.from("tag_dictionary").select("dict").eq("active", true).single();
 if (dictError) throw new Error("규칙 사전을 읽지 못했어요: " + dictError.message);
 const ruleDict = dictRow.dict as RuleDict;
-const deps = { store: supabaseKeywordStore(db), embed: embedTexts, judge: judgeWithOpenAI, axes: () => loadAxisVectors(ruleDict, embedTexts) };
+const deps = { store: supabaseKeywordStore(db), embed: embedTexts, judge: judgeWithOpenAI, axes: () => loadAxisVectors(ruleDict, embedTexts), axisHints: ruleAxisHints(ruleDict) };
 
 /** RFC 4180 CSV (supabase/seed/build_profiles.ts 와 같은 처리) */
 function parseCsv(text: string): Record<string, string>[] {

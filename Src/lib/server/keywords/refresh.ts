@@ -3,7 +3,7 @@
 
 import { hash, matchingMode, PARAMS, PIPELINE_VERSION, isKeywordCode, type Tag } from "@/lib/core/index.ts";
 import { loadDictionary } from "../dictionary";
-import { loadAxisVectors } from "./axes";
+import { loadAxisVectors, ruleAxisHints } from "./axes";
 import type { Db } from "../auth";
 import { recomputeGraph } from "../graph";
 import { embedTexts } from "../openai";
@@ -15,12 +15,14 @@ import { supabaseKeywordStore, touchKeywords } from "./store";
 /** 한 번에 다시 계산할 최대 프로젝트 수 (나머지는 다음 저장 때). 서버 함수 시간 제한 대비 */
 const MAX_PROJECTS_PER_RUN = 4;
 
-export function keywordDeps(db: Db): Deps {
+export async function keywordDeps(db: Db): Promise<Deps> {
+  const { dict } = await loadDictionary(db);
   return {
+    axisHints: ruleAxisHints(dict),
     store: supabaseKeywordStore(db),
     embed: embedTexts,
     judge: judgeWithOpenAI,
-    axes: async () => loadAxisVectors((await loadDictionary(db)).dict, embedTexts),
+    axes: async () => loadAxisVectors(dict, embedTexts),
   };
 }
 
@@ -47,7 +49,7 @@ export async function refreshKeywords(db: Db): Promise<{ processed: number; skip
     .map((x) => ({ ...x, print: fingerprint(x.records) }))
     .filter((x) => x.records.length && lastPrint.get(x.project.id) !== x.print);
 
-  const deps = keywordDeps(db);
+  const deps = await keywordDeps(db);
   for (const x of changed.slice(0, MAX_PROJECTS_PER_RUN)) {
     await refreshProject(db, deps, x.project, x.records, x.print);
   }

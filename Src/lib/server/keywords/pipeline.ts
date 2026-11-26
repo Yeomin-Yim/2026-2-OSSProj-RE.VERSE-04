@@ -17,6 +17,7 @@ import {
   screen,
   toKeywordTags,
   proposeAxes,
+  axisCandidates,
   type AiJudgment,
   type AxisVec,
   type AliasMemo,
@@ -56,7 +57,9 @@ export interface JudgeInput {
   mode: Mode;
   title: string;
   topic: string;
-  items: { id: string; text: string; sentences: string[]; nearest: { keyword: string; similarity: number }[]; axes: { code: string; label: string }[] }[];
+  items: { id: string; text: string; sentences: string[]; nearest: { keyword: string; similarity: number }[]; axes: { code: string; label: string; hint?: boolean }[] }[];
+  /** 공통 축 목록 (코드 · 이름 · 예시). 프롬프트 앞에 한 번 보여 준다 */
+  legend?: { code: string; text: string }[];
 }
 
 export interface Usage { input_tokens: number; output_tokens: number; model: string; ms: number }
@@ -69,6 +72,8 @@ export interface Deps {
   judge(input: JudgeInput): Promise<{ judgments: AiJudgment[]; usage: Usage }>;
   /** 공통 축과 그 임베딩 (2층). 없으면 축 없이 1층 키워드만 만든다 */
   axes?: () => Promise<AxisVec[]>;
+  /** 키워드 표현에 규칙 사전의 예시 말이 들어 있는 축 코드 (AI 에 주는 힌트. 확정이 아님) */
+  axisHints?: (text: string) => string[];
 }
 
 export interface PipelineInput {
@@ -139,11 +144,13 @@ export async function runKeywordPipeline(input: PipelineInput, deps: Deps): Prom
   const axisLabel = new Map(axisVecs.map((a) => [a.code, a.label]));
   const ambiguous = verdicts.filter((v): v is Extract<Verdict, { kind: "ambiguous" }> => v.kind === "ambiguous");
   ambiguous.sort((a, b) => b.cand.relevance - a.cand.relevance);
-  const asked: AskItem[] = ambiguous.slice(0, PARAMS.maxAmbiguous).map((verdict, i) => ({
-    id: `c${i + 1}`,
-    verdict,
-    axes: axisVecs.length ? proposeAxes(verdict.cand.vector, axisVecs).map((a) => a.code) : [],
-  }));
+  const hintsOf = (s: string) => (deps.axisHints ? deps.axisHints(s) : []);
+  const hintMap = new Map<string, string[]>();
+  const asked: AskItem[] = ambiguous.slice(0, PARAMS.maxAmbiguous).map((verdict, i) => {
+    const hints = hintsOf(verdict.cand.display);
+    hintMap.set(`c${i + 1}`, hints);
+    return { id: `c${i + 1}`, verdict, axes: axisVecs.length ? axisCandidates(verdict.cand.vector, axisVecs, hints) : [] };
+  });
   const deferred = ambiguous.length - asked.length;
   const askedSet = new Set(asked.map((a) => a.verdict));
   verdicts = verdicts.filter((v) => v.kind !== "ambiguous" || askedSet.has(v));
@@ -162,8 +169,9 @@ export async function runKeywordPipeline(input: PipelineInput, deps: Deps): Prom
           text: verdict.cand.display,
           sentences: verdict.cand.sids.slice(0, 2).map((sid) => text.get(sid) ?? "").filter(Boolean),
           nearest: verdict.nearest.map((n) => ({ keyword: n.keyword.canonical, similarity: Math.round(n.sim * 100) / 100 })),
-          axes: (axes ?? []).map((code) => ({ code, label: axisLabel.get(code) ?? code })),
+          axes: (axes ?? []).map((code) => ({ code, label: axisLabel.get(code) ?? code, hint: hintMap.get(id)?.includes(code) })),
         })),
+        legend: axisVecs.filter((a) => a.text).map((a) => ({ code: a.code, text: a.text! })),
       });
       judgments = out.judgments;
       usage = out.usage;
@@ -204,6 +212,8 @@ export async function runKeywordPipeline(input: PipelineInput, deps: Deps): Prom
   if (axisVecs.length) {
     for (const k of keywords) {
       if (k.axes.length) continue;
+      const hinted = hintsOf(k.canonical).filter((h) => axisLabel.has(h));
+      if (hinted.length) { k.axes = hinted.slice(0, 2); continue; }
       const v = dict.find((d) => d.canonical === k.canonical)?.vector ?? vectors.get(k.surfaces[0]?.surface ?? "");
       const top = v ? proposeAxes(v, axisVecs, 1, AXIS_FALLBACK)[0] : undefined;
       if (top) k.axes = [top.code];
