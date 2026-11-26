@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { saveOverview } from "@/app/(app)/projects/actions";
 import { useAction } from "@/components/ui/Toast";
+import { TodoList } from "@/components/student/StudentData";
 import type { Overview } from "./types";
 
 const FIELDS: [keyof Overview, string][] = [
@@ -48,6 +49,7 @@ export function OverviewTab({ projectId, overview }: { projectId: string; overvi
           {pending ? "저장 중…" : "확인하고 저장"}
         </button>
       </div>
+      <TodoList todoKey={"project:" + projectId} title="이 프로젝트에서 해야 할 일" />
     </>
   );
 }

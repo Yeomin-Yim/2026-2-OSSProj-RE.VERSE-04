@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 
 interface Props {
   title?: string;
@@ -13,13 +13,26 @@ interface Props {
 export function Modal({ title, wide, onClose, children }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const pressedOutside = useRef(false);
-
+  const titleId = useId();
+  // onClose 가 렌더링마다 새로 만들어져도 리스너를 다시 달지 않도록 최신 값을 ref 로 들고 있는다
+  const close = useRef(onClose);
   useEffect(() => {
-    box.current?.querySelector<HTMLElement>("input,textarea,select")?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    close.current = onClose;
+  }, [onClose]);
+
+  // 처음 열릴 때만 첫 입력칸에 포커스 (입력 중에 포커스가 튀지 않도록)
+  useEffect(() => {
+    const first = box.current?.querySelector<HTMLElement>("input:not([type=file]):not([type=checkbox]):not([type=radio]),textarea,select");
+    (first ?? box.current)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      // 모달이 겹쳐 있으면 가장 위의 것만 닫는다
+      if (e.key !== "Escape") return;
+      const overlays = document.querySelectorAll(".overlay");
+      if (overlays[overlays.length - 1] === box.current?.parentElement) close.current();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   return (
     <div
@@ -27,8 +40,15 @@ export function Modal({ title, wide, onClose, children }: Props) {
       onMouseDown={(e) => (pressedOutside.current = e.target === e.currentTarget)}
       onClick={(e) => e.target === e.currentTarget && pressedOutside.current && onClose()}
     >
-      <div ref={box} className={"modal" + (wide ? " wide" : "")} role="dialog" aria-modal="true">
-        {title && <h3>{title}</h3>}
+      <div
+        ref={box}
+        className={"modal" + (wide ? " wide" : "")}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        tabIndex={-1}
+      >
+        {title && <h3 id={titleId}>{title}</h3>}
         {children}
       </div>
     </div>
