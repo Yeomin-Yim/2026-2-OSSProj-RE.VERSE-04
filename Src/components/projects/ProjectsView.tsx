@@ -16,6 +16,7 @@ import { OverviewTab } from "./OverviewTab";
 import { ProjectModal } from "./ProjectModal";
 import { RightPanel } from "./RightPanel";
 import { STATUS_LABEL, ym } from "./format";
+import { orderProjects } from "@/lib/core/projects/order";
 import type { AiOverview, Checks, Guide, Overview, ProjectRow, RecordView, TabKey, TagInfo } from "./types";
 
 interface Props {
@@ -36,6 +37,18 @@ interface Props {
 
 
 export function ProjectsView(props: Props) {
+  // 목록: 팀·개인주제 프로젝트(최근 순) 위, 과목·일반 활동은 아래에 접어 둔다 (판단기록 D24)
+  const groups = orderProjects(props.projects);
+  const [showOther, setShowOther] = useState(() => groups.other.some((p) => p.id === props.project.id));
+  const item = (p: ProjectRow) => (
+    <Link key={p.id} href={`/projects/${p.id}`} className={"proj-item" + (p.id === props.project.id ? " sel" : "")}>
+      <span>
+        <b>{p.title}</b>
+        <small>{p.end_date || p.start_date ? `${ym(p.start_date)}${p.end_date ? "–" + ym(p.end_date) : ""} · ` : ""}자료 {p.record_count}</small>
+      </span>
+      <Icon name="chevR" />
+    </Link>
+  );
   const { projects, project, records, overview } = props;
   const toast = useToast();
   const [tab, setTab] = useState<TabKey>(props.initialTab ?? "files");
@@ -74,15 +87,20 @@ export function ProjectsView(props: Props) {
           <button className="btn primary block" onClick={() => setModal("new")}>
             <Icon name="plus" /> 새 프로젝트
           </button>
-          {projects.map((p) => (
-            <Link key={p.id} href={`/projects/${p.id}`} className={"proj-item" + (p.id === project.id ? " sel" : "")}>
-              <span>
-                <b>{p.title}</b>
-                <small>{STATUS_LABEL[p.status]} · 자료 {p.record_count}{gnotesOf(p.id).length ? " · 노트 " + gnotesOf(p.id).length : ""}</small>
-              </span>
-              <Icon name="chevR" />
-            </Link>
-          ))}
+          {groups.main.map(item)}
+          {groups.other.length > 0 && (
+            <>
+              <button type="button" className="proj-group-head" aria-expanded={showOther} onClick={() => setShowOther((v) => !v)}>
+                <Icon name={showOther ? "chevD" : "chevR"} />
+                과목 수업 · 일반 활동 <span className="count">{groups.other.length}</span>
+              </button>
+              {showOther ? groups.other.map(item) : (
+                <div className="proj-group-chips">
+                  {groups.other.map((p) => <Link key={p.id} href={`/projects/${p.id}`} className="imp-chip subj">{p.title}</Link>)}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* 가운데: 프로젝트 상세 */}
@@ -103,6 +121,8 @@ export function ProjectsView(props: Props) {
             ))}
           </div>
 
+          {/* 탭을 바꾸면 내용이 짧게 나타난다 (key 로 새로 그림) */}
+          <div key={tab} className="tab-pane">
           {tab === "files" && (
             <>
               <div className="sec-head">
@@ -149,6 +169,7 @@ export function ProjectsView(props: Props) {
               )}
             </>
           )}
+          </div>
         </div>
 
         {/* 오른쪽: 보완 제안 · 기록 확인 */}

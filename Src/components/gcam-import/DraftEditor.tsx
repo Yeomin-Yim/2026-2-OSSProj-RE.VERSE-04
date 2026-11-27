@@ -359,11 +359,9 @@ function AskCard({ note, unitById, otherOptions, onTitle, onPick, onMove, onSkip
       <div className="imp-ask-top">
         <span className="imp-date">{ymd(note.date)}</span>
         <input className="imp-note-title" value={note.title} aria-label="노트 제목" onChange={(e) => onTitle(e.target.value)} />
+        <button type="button" className="imp-link" aria-expanded={show} onClick={() => setShow((s) => !s)}>{show ? "접기" : "본문"}</button>
       </div>
-      <button type="button" className="imp-preview" aria-expanded={show} onClick={() => setShow((s) => !s)}>
-        {show || repeats ? <span /> : <span>{head}</span>}
-        <em>{show ? "접기" : "본문"}</em>
-      </button>
+      {!show && !repeats && <p className="imp-ask-preview">{head}</p>}
       {show && <Body note={note} unitById={unitById} />}
       {note.question && !GENERIC_Q.test(note.question) && <p className="imp-ask-q">{note.question}</p>}
       <div className="imp-choices" role="group" aria-label={`${note.title} 저장할 곳`}>
@@ -379,8 +377,9 @@ function AskCard({ note, unitById, otherOptions, onTitle, onPick, onMove, onSkip
             {otherOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         )}
-        <button type="button" className="imp-choice ghost" onClick={() => onMove("general")}>일반 활동</button>
-        <button type="button" className="imp-choice ghost" onClick={onSkip}>저장 안 함</button>
+        <span className="imp-choice-sep" aria-hidden="true" />
+        <button type="button" className="imp-link" onClick={() => onMove("general")}>일반 활동</button>
+        <button type="button" className="imp-link muted" onClick={onSkip}>저장 안 함</button>
       </div>
     </article>
   );

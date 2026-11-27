@@ -1,7 +1,7 @@
 "use client";
 
 // 스크랩 (프로토타입 #/scraps) — scraps · todos 표에 저장된 것만 보여 준다.
-// 채용공고 스크랩은 채용공고 데이터가 아직 없어 빈 상태로 둔다.
+// 채용공고 스크랩: 사람인 공고(SARAMIN_ACCESS_KEY 가 있을 때)의 ★로 모인다. 키가 없으면 그래프에서 검색 링크만 보인다.
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -100,7 +100,7 @@ export function ScrapsView() {
       ) : (
         <div className="sc-empty">
           {tab === "posting"
-            ? <>채용공고 데이터는 아직 연결되지 않았어요.<br />공고 수집 기능이 생기면 공고 옆의 ★로 여기에 모을 수 있어요.</>
+            ? <>스크랩한 공고가 없어요.<br />연결 그래프에서 직무를 고르면 공고를 찾아보고 ★로 모을 수 있어요.</>
             : scraps.length ? "이 종류의 스크랩이 아직 없어요."
             : <>아직 스크랩이 없어요.<br />연결 그래프에서 학과·대학·직무, 프로젝트, 노트 옆의 ★을 누르면 여기에 모여요.</>}
           <br /><Link href="/graph" className="btn sm" style={{ marginTop: 14 }}>연결 그래프로 가기</Link>

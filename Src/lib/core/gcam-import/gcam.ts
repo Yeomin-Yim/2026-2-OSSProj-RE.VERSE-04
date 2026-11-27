@@ -60,8 +60,13 @@ export function parseSessions(units: GcamUnit[]): { sessions: Session[]; dropped
 /** '영어(선유반)' → '영어'. 반 이름은 OCR 이 흔들리고(선유반/선윤반) 학기마다 바뀌므로 뺀다. '기타'는 과목이 아니다. */
 export function subjectName(raw: string): string | null {
   const name = raw.replace(/\(.*\)\s*$/, "").trim();
-  return name && name !== "기타" ? name : null;
+  if (!name || name === "기타") return null;
+  // 알려진 과목으로 시작하면 뒤에 붙은 반 이름은 뗀다: '국어A반'·'과학4반'(OCR 이 A 를 4 로) → '국어'·'과학'
+  const known = KNOWN_SUBJECTS.find((k) => name.startsWith(k) && !/^[가-힣]/.test(name.slice(k.length)));
+  return known ?? name;
 }
+/** 길이가 긴 것부터 (기술가정 → 기술 순서로 맞추기 위해) */
+const KNOWN_SUBJECTS = ["기술가정", "주제중심", "제2외국어", "국어", "수학", "영어", "사회", "과학", "역사", "한국사", "체육", "음악", "미술", "기술", "정보", "도덕", "윤리"];
 
 /** '2026년 8월 26일 수요일' → '2026-08-26' */
 export function toIsoDate(text: string): string | null {

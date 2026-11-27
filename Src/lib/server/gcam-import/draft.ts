@@ -136,7 +136,16 @@ export async function buildDraft(units: GcamUnit[], existing: ExistingProject[])
   for (const n of draft.unassigned) if (n.kind === "school" && PROJECT_FLOW.test(n.title) && !SCHOOL_EVENT.test(n.title)) Object.assign(n, { kind: "unsure", question: "프로젝트 진행 기록 같아요. 어느 프로젝트에 둘까요?" });
   // 확인할 노트에 후보가 없으면, 그날 진행 중이던 프로젝트를 날짜로 찾아 추천한다
   const textOf = (ids: string[]) => ids.map((id) => unitText.get(id) ?? "").join(" ");
-  for (const n of draft.unassigned) if (n.kind === "unsure" && !n.candidates.length) n.candidates = activeProjects(draft, n.date, `${n.title} ${textOf(n.unit_ids)}`);
+  for (const n of draft.unassigned) {
+    if (n.kind !== "unsure") continue;
+    const text = `${n.title} ${textOf(n.unit_ids)}`;
+    // 학교 행사 말이 뚜렷하고 프로젝트 진행 말이 없으면 묻지 않는다
+    if (SCHOOL_EVENT.test(n.title) && !PROJECT_FLOW.test(n.title)) { Object.assign(n, { kind: "school", candidates: [], question: "" }); continue; }
+    // 후보가 없으면 날짜·겹치는 말로 찾고, 있으면 같은 기준으로 순서만 다시 맞춘다 (첫째가 '추천' 버튼)
+    n.candidates = n.candidates.length
+      ? n.candidates.map((c, i) => ({ c, i, w: overlap(c, text) })).sort((a, b) => b.w - a.w || a.i - b.i).map((x) => x.c)
+      : activeProjects(draft, n.date, text);
+  }
   // 바로잡는 과정에서 단위를 모두 잃은 노트는 뺀다
   for (const p of draft.projects) p.notes = p.notes.filter((n) => n.unit_ids.length);
   draft.projects = draft.projects.filter((p) => p.notes.length);
@@ -151,16 +160,21 @@ export async function buildDraft(units: GcamUnit[], existing: ExistingProject[])
 /** 프로젝트 진행 단계로 보이는 말 (학교생활 안전장치) */
 const PROJECT_FLOW = /인터뷰|리서치|설문|현장\s?관찰|팀\s?(활동|회의|대화|프로젝트|빌딩)|발표\s?(준비|리허설|대본|연습)|팀\s?발표|포스터|부스\s?준비|프로토타입|시제품|(중간|종합|1차|2차)\s?피드백|피드백\s?반영|문제\s?(정의|해결)|아이디어|솔루션|중간\s?발표|종피/u;
 /** 프로젝트 말이 있어도 학교 행사인 것 */
-const SCHOOL_EVENT = /목표\s?설정|부스\s?체험|총회|학생\s?자치|자치회|오리엔테이션|\bOT\b|설명회|강연|특강|체육\s?대회|운동회|소풍|현장\s?체험|축제/u;
+const SCHOOL_EVENT = /목표\s?설정|부스\s?체험|총회|학생\s?자치|자치회|오리엔테이션|\bOT\b|설명회|강연|특강|체육\s?대회|운동회|소풍|현장\s?체험|축제|해커톤\s?수업|미니\s?수업/u;
 /** 활동이 없던 날 */
 const EMPTY_DAY = /아파서|아팠|병\s?조퇴|조퇴|결석|쉬는\s?날|딱히\s?없|한\s?(것|게)\s?없|기록할\s?(것|게)\s?없/u;
 
+const TEAM_WORDS = /팀\s?(대화|활동|회의|프로젝트|빌딩)|팀원|팀플|AEIOU|현장\s?관찰|문제\s?정의|이해관계자|되어\s?보기|저니\s?맵|페르소나/iu;
 const PERSONAL_WORDS = /개주프|개인\s?주제|개인\s?성장|나를\s?찾는/u;
 /** 제목의 말(두 글자 이상) 중 노트 글에 나오는 수. 개주프 노트는 개인주제 프로젝트와 강하게 맞춘다 */
-function overlap(projectTitle: string, text: string): number {
+export function overlap(projectTitle: string, text: string): number {
   const words = projectTitle.split(/[\s·,()]+/).filter((w) => w.length >= 2 && !/프로젝트|팀|문제|해결/.test(w));
   const hits = words.filter((w) => text.includes(w)).length;
-  return hits + (PERSONAL_WORDS.test(text) && PERSONAL_WORDS.test(projectTitle) ? 3 : 0) - (PERSONAL_WORDS.test(text) && !PERSONAL_WORDS.test(projectTitle) ? 1 : 0);
+  const personal = PERSONAL_WORDS.test(projectTitle);
+  // 개주프 말이면 개인주제 프로젝트, 팀 말(팀 대화·팀원·팀 프로젝트)이면 팀 프로젝트 쪽으로 (말차 2학기: "팀 대화"가 개주프로 추천됐다)
+  const toPersonal = PERSONAL_WORDS.test(text) ? (personal ? 3 : -1) : 0;
+  const toTeam = TEAM_WORDS.test(text) ? (personal ? -2 : 2) : 0;
+  return hits + toPersonal + toTeam;
 }
 
 /** 그 날짜 앞뒤(7일)에 노트가 있는 AI 프로젝트 제목. 노트 글과 겹치는 말이 많은 순, 같으면 날짜가 가까운 순 */
@@ -196,10 +210,18 @@ function addToSubject(draft: Draft, existing: ExistingProject[], subject: string
   project.notes.push(note);
 }
 
-/** AI 입력: "[S3] 2026-08-27 오후" + "U0042 내용" 줄들 */
+/**
+ * AI 입력: "[S3] 2026-08-27 오후" + "U0042 내용" 줄들.
+ * 칸 하나가 길면 단위마다 앞부분만 보낸다: 어느 프로젝트인지는 앞 몇 문장으로 충분하고, 입력이 짧을수록 묶기가 빠르다 (판단기록 D22)
+ */
+const SESSION_CHARS = Number(process.env.GCAM_SESSION_CHARS ?? 0) || Infinity;
 function sessionsText(sessions: Session[]): string {
   return sessions
-    .map((s) => [`[${s.id}] ${s.date ?? "날짜 없음"} ${s.part === "am" ? "오전" : "오후"}`, ...s.units.map((u) => `${u.id} ${u.text}`)].join("\n"))
+    .map((s) => {
+      const per = Math.max(60, Math.floor(SESSION_CHARS / Math.max(1, s.units.length)));
+      const lines = s.units.map((u) => `${u.id} ${u.text.length > per ? u.text.slice(0, per) + "…" : u.text}`);
+      return [`[${s.id}] ${s.date ?? "날짜 없음"} ${s.part === "am" ? "오전" : "오후"}`, ...lines].join("\n");
+    })
     .join("\n\n");
 }
 

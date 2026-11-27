@@ -354,10 +354,23 @@ function Steps({ phase, view, uploaded }: { phase: Phase; view: ImportView | nul
   const readAll = total !== null && done >= total;
   const at = phase.k === "uploading" || !uploaded ? 0 : !view || !readAll ? 1 : 2;
 
+  // 묶기는 서버 한 번 호출이라 진행률이 없다: 흐른 시간으로 막대를 채운다 (보통 40~75초, 판단기록 D22). 95%에서 멈춘다
+  const grouping = at === 2 && phase.k === "reading";
+  const [since, setSince] = useState<number | null>(null);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!grouping) { setSince(null); return; }
+    setSince((s) => s ?? Date.now());
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [grouping]);
+  const secs = since ? Math.floor((Date.now() - since) / 1000) : 0;
+  const groupPct = Math.min(95, Math.round(100 * (1 - Math.exp(-secs / 30))));
+
   const steps = [
     { label: "PDF 올리기", detail: phase.k === "uploading" ? "올리는 중" : uploaded ? "완료" : "" },
     { label: "글자 읽기", detail: total === null ? (at === 1 ? "쪽수 확인 중" : "") : `${done} / ${total}쪽` },
-    { label: "프로젝트로 묶기", detail: at === 2 ? "40~50초 걸려요" : "" },
+    { label: "프로젝트로 묶기", detail: at === 2 ? (secs ? `보통 1분 · ${secs}초` : "보통 1분 걸려요") : "" },
     { label: "검토하고 저장", detail: "" },
   ];
 
@@ -372,7 +385,11 @@ function Steps({ phase, view, uploaded }: { phase: Phase; view: ImportView | nul
           </li>
         ))}
       </ol>
-      {total !== null && at >= 1 && (
+      {grouping ? (
+        <div className="imp-bar group" role="progressbar" aria-label="묶는 중" aria-valuemin={0} aria-valuemax={100} aria-valuenow={groupPct}>
+          <i style={{ width: `${groupPct}%` }} />
+        </div>
+      ) : total !== null && at >= 1 && (
         <div className="imp-bar" role="progressbar" aria-label="읽은 쪽" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
           <i style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
         </div>

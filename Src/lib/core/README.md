@@ -33,7 +33,7 @@ cd Src && npm test     # Node 22.18 이상 (TypeScript를 바로 실행)
 
 ## 시험값
 
-`graph/graph.ts`의 `THRESHOLD`(0.18)·`GROUP_WEIGHT`, `recommend/recommend.ts`의 `BREADTH`·`DEPTH`(0.5/0.5)는 시험값입니다. 바꾸면 계산 결과가 달라지므로 팀 결정 후에 고칩니다.
+`graph/graph.ts`의 `THRESHOLD`(0.10, 2026-11-27 0.18에서 변경 · 판단기록 D27)·`GROUP_WEIGHT`, `recommend/recommend.ts`의 `BREADTH`·`DEPTH`(0.5/0.5)는 시험값입니다. 바꾸면 계산 결과가 달라지므로 팀 결정 후에 고칩니다.
 
 ## 아직 없는 것
 

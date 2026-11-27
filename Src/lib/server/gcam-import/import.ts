@@ -152,10 +152,21 @@ export async function confirmImport(db: Db, id: string, draft: Draft) {
     // 프로젝트는 새로 만들 노트가 있을 때만 찾거나 만든다 (다시 가져오기에서 빈 프로젝트가 생기지 않게)
     const { data: mine, error: listError } = await db.from("projects").select("id, title");
     if (listError) throw new Error(listError.message);
+    // 새로 만드는 프로젝트의 기간 = 그 프로젝트에 들어가는 노트의 첫 날짜 ~ 마지막 날짜 (목록 정렬·기간 표시용, 판단기록 D24)
+    const span = new Map<string, { from: string; to: string }>();
+    for (const t of targets) {
+      if (!t.date) continue;
+      const k = t.project.id ?? t.project.title.trim();
+      const cur = span.get(k);
+      span.set(k, { from: !cur || t.date < cur.from ? t.date : cur.from, to: !cur || t.date > cur.to ? t.date : cur.to });
+    }
+    // 마지막 노트가 한 달 넘게 지난 프로젝트는 '완료'로 만든다 (지난 학기 회고록을 올린 경우)
+    const done = (to?: string) => !!to && Date.now() - Date.parse(to) > 30 * 86_400_000;
     const resolve = async ({ id: existingId, title }: { id: string | null; title: string }) => {
       const found = mine.find((p) => p.id === existingId) ?? mine.find((p) => p.title.trim() === title.trim());
       if (found) return found.id;
-      const created = { id: await createProject(db, { title: title.trim(), topic: "", start_date: null, end_date: null, status: "active" }), title };
+      const when = span.get(existingId ?? title.trim());
+      const created = { id: await createProject(db, { title: title.trim(), topic: "", start_date: when?.from ?? null, end_date: when?.to ?? null, status: done(when?.to) ? "done" : "active" }), title };
       mine.push(created);
       return created.id;
     };

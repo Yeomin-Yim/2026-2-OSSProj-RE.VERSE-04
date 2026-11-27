@@ -1,5 +1,7 @@
 "use client";
 
+import { MonthField } from "@/components/ui/MonthField";
+import { Segmented } from "@/components/ui/Segmented";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createProject, deleteProject, updateProject } from "@/app/(app)/projects/actions";
@@ -68,11 +70,11 @@ export function ProjectModal({ project, onClose }: { project?: ProjectRow; onClo
       <div className="row2">
         <div className="field">
           <label>시작</label>
-          <input type="month" value={form.start} onChange={(e) => set({ start: e.target.value })} />
+          <MonthField label="시작" value={form.start} onChange={(v) => set({ start: v })} />
         </div>
         <div className="field">
           <label>종료</label>
-          <input type="month" value={form.end} onChange={(e) => set({ end: e.target.value })} />
+          <MonthField label="종료" value={form.end} onChange={(v) => set({ end: v })} placeholder="진행 중" />
         </div>
       </div>
       <div className="row2">
@@ -82,10 +84,7 @@ export function ProjectModal({ project, onClose }: { project?: ProjectRow; onClo
         </div>
         <div className="field">
           <label>상태</label>
-          <select value={form.status} onChange={(e) => set({ status: e.target.value as "active" | "done" })}>
-            <option value="active">진행 중</option>
-            <option value="done">완료</option>
-          </select>
+          <Segmented label="상태" value={form.status} onChange={(v) => set({ status: v })} options={[{ value: "active", label: "진행 중" }, { value: "done", label: "완료" }]} />
         </div>
       </div>
       <div className="modal-actions">
