@@ -23,6 +23,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         {notice && <p className="login-notice">{notice}</p>}
         {error && <p className="login-error">{error}</p>}
         <button className="btn primary">로그인</button>
+        <p className="login-links"><Link href="/find-id">아이디 찾기</Link><span aria-hidden="true">·</span><Link href="/forgot">비밀번호 찾기</Link></p>
         <p className="login-alt">처음이신가요? <Link href="/signup">회원가입</Link></p>
       </form>
     </div>

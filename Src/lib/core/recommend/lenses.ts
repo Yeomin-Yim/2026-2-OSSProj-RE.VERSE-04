@@ -11,9 +11,13 @@ import { MIN_TOTAL, scoreProfiles } from "./recommend.ts";
  *   interest 관심 있을 만한 것 주제 축(D)만. 스스로 고른 개인주제 프로젝트가 있으면 그것 기준 (interestScores, F1)
  * 축 코드는 접두사 없는 코드(D07, M22 …): forRecommend 를 거친 태그
  */
-export type LensKey = "overall" | "repeated" | "deep" | "interest";
+/** 점수표(축 무게)로 계산하는 관점 */
+export type AxisLensKey = "overall" | "repeated" | "deep" | "interest";
+/** similar = 커리어넷 전체에서 임베딩으로 모으고 AI 가 고른 "기록과 닮은" (lib/server/explore/similar.ts, 판단기록 D35) */
+export type LensKey = AxisLensKey | "similar";
 export const LENS_LABEL: Record<LensKey, string> = {
   overall: "종합",
+  similar: "기록과 닮은",
   repeated: "많이 해 온 것",
   deep: "깊게 해 본 것",
   interest: "관심 있을 만한 것",
@@ -76,7 +80,7 @@ export function lensScores(
   projects: ProjectTags[],
   profiles: Profile[],
   opts: { idf?: (code: string) => number; selfChosen?: Set<string>; shares?: Record<string, number>; max?: number } = {},
-): Record<LensKey, LensResult[]> {
+): Record<AxisLensKey, LensResult[]> {
   const idf = opts.idf ?? (() => 1);
   const rare = rarityAmongStudents(opts.shares ?? COMMON_AXIS_SHARE);
   const max = opts.max ?? 5;

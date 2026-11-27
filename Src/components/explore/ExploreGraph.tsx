@@ -8,7 +8,7 @@
 // 예시 데이터는 시연 모드(?demo=1)에서만, 화면 위 띠로 구분해서 보여 준다.
 // 그림은 SVG (라이브러리 없음). 노트·스크랩·체크리스트·탐색 위치는 DB 에 저장한다 (시연 모드 제외).
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createNote, moveNote, saveExplorePlace } from "@/app/(app)/graph/actions";
@@ -56,6 +56,7 @@ const short = (s: string, n = 14) => (s.length > n ? s.slice(0, n - 1) + "…" :
 
 const LENS_HINT: Record<LensKey, string> = {
   overall: "넓이와 깊이를 함께 본 점수",
+  similar: "커리어넷 학과·직업 1,000여 곳 중 내 프로젝트와 이어지는 곳 (AI 가 이유와 함께 고름)",
   repeated: "여러 프로젝트에서 되풀이해 온 활동 기준",
   deep: "한 프로젝트를 깊게 한 경험 기준",
   interest: "내가 다뤄 온 주제 기준 (개인주제 프로젝트 우선)",
@@ -65,7 +66,7 @@ export function ExploreGraph({ data: raw, projects, notes: initialNotes, place, 
   // 추천 관점: 고른 관점의 추천으로 각 쪽의 children 을 바꿔 끼운다 (나머지 그래프 로직은 그대로)
   const [lens, setLens] = useState<LensKey>("overall");
   const data = useMemo<ExploreData>(() => {
-    const pick = (s: ExploreData["college"]) => (s.lenses?.[lens] ? { ...s, children: s.lenses[lens]! } : s);
+    const pick = (s: ExploreData["college"]) => (s.lenses?.[lens]?.length ? { ...s, children: s.lenses[lens]! } : s);
     return { ...raw, college: pick(raw.college), career: pick(raw.career) };
   }, [raw, lens]);
   const router = useRouter();
@@ -608,20 +609,15 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
     const o = node.posting;
     return (
       <>
-        <div className="panel-label">{demo ? "채용공고 (예시)" : "채용공고 · 사람인"}</div>
+        <div className="panel-label">{demo ? "채용공고 (예시)" : o.source === "public" ? "채용공고 · 공공기관" : "채용공고 · 사람인"}</div>
         <h2>{o.company}</h2>
-        <p className="desc">{o.title} · {o.location} · 마감 {o.deadline}</p>
-        <Notice type="job" />
+        <PostingBadges o={o} />
+        <p className="desc">{o.title}</p>
         {demo && <div className="panel-scrap"><button className="scrap-btn" disabled title="시연 모드에서는 스크랩할 수 없어요"><Icon name="star" /></button><span>시연 모드에서는 스크랩을 저장하지 않아요</span></div>}
-        <h3 className="section-title">{demo ? "한 줄 요약" : "공고 정보"}</h3>
-        <p className="desc">{o.summary}</p>
-        {!demo && o.requirements.length > 0 && <p className="desc">자격: {o.requirements.join(" · ")}</p>}
-        <div className="panel-btns">
-          {!demo && node.url && <a className="btn sm primary" href={node.url} target="_blank" rel="noreferrer">사람인에서 원문 보기</a>}
-          <button className={"btn sm" + (demo ? " primary" : "")} onClick={() => onPostings(node.parentId!, node.id)}>목록에서 보기</button>
-        </div>
-        <TodoList todoKey={"posting:" + node.id} defaults={CHECKLIST.posting} />
-        {demo && <Notice type="mock" />}
+        <PostingBody o={o} url={demo ? null : node.url ?? null} />
+        {!demo && <button className="btn ghost pt-all" onClick={() => onPostings(node.parentId!, node.id)}>이 직무 공고 모두 보기</button>}
+        <TodoList todoKey={"posting:" + node.id} defaults={o.checklist ?? CHECKLIST.posting} title="지원 체크리스트" />
+        {demo ? <Notice type="mock" /> : <Notice type="job" />}
       </>
     );
   }
@@ -644,6 +640,7 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
 
       {demo && node.kind !== "info" && <Notice type="mock" />}
       {!demo && (node.kind === "root" || node.kind === "recommend") && <Notice type="score" />}
+      {isSchool && !demo && <AdmissionBox a={node.admission} />}
       {(isMajor || isSchool) && <Notice type="school" />}
       {statusMsg && node.kind === "root" && <div className={styles.statusBox}><b>추천 준비 중</b><br />{statusMsg}</div>}
       {demo && (isSchool || isJob) && (
@@ -652,7 +649,7 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
       {scrap && (
         <div className="panel-scrap">
           {readOnly ? <button className="scrap-btn" disabled title="시연 모드에서는 스크랩할 수 없어요"><Icon name="star" /></button> : <ScrapButton input={scrap} />}
-          <span>{readOnly ? "시연 모드에서는 스크랩을 저장하지 않아요" : scrapped ? "스크랩했어요 · 스크랩 메뉴에서 다시 볼 수 있어요" : "스크랩해 두고 나중에 다시 보기"}</span>
+          <span>{readOnly ? "시연 모드에서는 저장하지 않아요" : scrapped ? "스크랩했어요" : "스크랩"}</span>
         </div>
       )}
 
@@ -662,6 +659,12 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
           <div className="bar"><i style={{ width: Math.min(100, node.score) + "%" }} /></div>
           {node.breadth != null && <p className="panel-hint" style={{ marginTop: 6 }}>넓이 {node.breadth} · 깊이 {node.depth} (각 50%)</p>}
         </div>
+      )}
+      {node.tags && node.tags.length > 0 && (
+        <>
+          <h3 className="section-title">{demo ? "강점 키워드" : "겹친 부분"}</h3>
+          <div className="tags">{node.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
+        </>
       )}
 
       {node.id === current.id && (nextList.length > 0 || isJob || isMajor) && (
@@ -674,9 +677,15 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
               ))}
             </div>
           ) : (
-            <div className={styles.statusBox}>
-              {isJob ? "채용공고 데이터는 아직 연결되지 않았어요. 공고 수집 기능이 생기면 여기에 표시돼요." : "이 학과의 개설 대학 데이터가 아직 없어요 (universities)."}
-            </div>
+            isJob && node.links?.length ? (
+              <div className="next-list">
+                {node.links.map((l) => (
+                  <a key={l.url} className="next-btn" href={l.url} target="_blank" rel="noreferrer">{dot("posting")}{l.label}<small>새 창 · 최신 공고</small></a>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.statusBox}>{isJob ? "이 직무의 공고를 아직 찾지 못했어요." : "이 학과의 개설 대학 정보가 아직 없어요."}</div>
+            )
           )}
           {isJob && demo && <div className="panel-btns"><button className="btn sm primary" onClick={() => onPostings(node.id, null)}>채용공고 목록으로 이동</button></div>}
         </>
@@ -696,12 +705,6 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
           </div>
         </>
       )}
-      {node.tags && node.tags.length > 0 && (
-        <>
-          <h3 className="section-title">{demo ? "강점 키워드" : "채운 점수표 칸 (내 기록의 태그)"}</h3>
-          <div className="tags">{node.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
-        </>
-      )}
       {!demo && node.url && <div className="panel-btns"><a className="btn sm" href={node.url} target="_blank" rel="noreferrer">대학 홈페이지</a></div>}
 
       {node.kind === "info" && (
@@ -710,7 +713,7 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
             {node.tpl && <button className="btn sm primary" onClick={() => onTemplate(node.tpl!)}><Icon name="file" />{node.tpl === "altform-dongguk-2027" ? "학교생활기록부 대체서식" : "프로젝트 포트폴리오"} 만들기</button>}
             <button className="btn sm" onClick={() => onPick(current)}>← {current.label}</button>
           </div>
-          {node.tpl && <Notice type={node.tpl.startsWith("altform") ? "form" : "noai"} />}
+          {node.tpl?.startsWith("altform") && <Notice type="form" />}
           {node.action === "todo" && current.kind !== "root" && (
             <TodoList todoKey={(current.kind === "target" ? "university:" : "job:") + current.id}
               defaults={current.kind === "target" ? CHECKLIST.university : CHECKLIST.job} title={current.label + " 준비 체크리스트"} />
@@ -771,37 +774,117 @@ function Postings({ data, jobId, hi, onClose }: { data: ExploreData; jobId: stri
     <section id="exPostings" className="postings" aria-label="채용공고 목록">
       <div className="ph">
         <span className="nd-kind proj"><i />채용공고</span>
-        <h3>{job.label} <small>{data.demo ? `${list.length}건 · 예시` : list.length ? `${list.length}건 · 사람인 최신순` : "준비 중"}</small></h3>
+        <h3>{job.label} <small>{data.demo ? `${list.length}건 · 예시` : list.length ? `지금 모집 중 ${list.length}건 · 최신순` : "지금 맞는 공고가 없어요"}</small></h3>
         <button className="icon-btn" onClick={onClose} aria-label="닫기"><Icon name="x" /></button>
       </div>
       {data.demo || list.length ? (
         <>
           {data.demo && <Notice type="mock" extra="실제 공고는 원문을 직접 확인하세요." />}
-          <Notice type="job" />
           {list.map((n) => n.posting && (
             <details key={n.id} className={"posting" + (n.id === hi ? " on" : "")} open={n.id === hi}>
               <summary>
-                <span className="co">{n.posting.company}</span><span className="tt">{n.posting.title}</span>
-                <span className="mt">{n.posting.location} · 마감 {n.posting.deadline}</span>
+                <span className="pt-main">
+                  <span className="co">{n.posting.company}</span>
+                  <span className="tt">{n.posting.title}</span>
+                </span>
+                <PostingBadges o={n.posting} compact />
+                <span className="mt">{n.posting.location}{n.posting.start ? ` · ${n.posting.start.slice(5).replace("-", "/")} 등록` : ` · 마감 ${n.posting.deadline}`}</span>
               </summary>
               <div className="pb">
-                <h5>{data.demo ? "요약" : "공고 정보"}</h5><p>{n.posting.summary}</p>
-                {n.posting.requirements.length > 0 && <><h5>자격 요건</h5><ul>{n.posting.requirements.map((r) => <li key={r}>{r}</li>)}</ul></>}
-                {n.posting.preferred.length > 0 && <><h5>우대 사항</h5><ul>{n.posting.preferred.map((r) => <li key={r}>{r}</li>)}</ul></>}
+                <PostingBody o={n.posting} url={data.demo ? null : n.url ?? null} />
                 {data.demo && <><h5>내 메모 <span className="hint">· 시연 모드에서는 저장하지 않아요</span></h5>
                 <textarea className="memo" disabled placeholder="실제 채용공고가 연결되면 메모를 남길 수 있어요." /></>}
-                <TodoList todoKey={"posting:" + n.id} defaults={CHECKLIST.posting} />
-                <div className="pf2">{data.demo ? <span>· 예시 데이터라 원문 링크가 없어요</span> : n.url && <a href={n.url} target="_blank" rel="noreferrer">사람인에서 원문 보기 →</a>}</div>
+                <TodoList todoKey={"posting:" + n.id} defaults={n.posting.checklist ?? CHECKLIST.posting} title="지원 체크리스트" />
               </div>
             </details>
           ))}
         </>
       ) : (
         <div className={styles.statusBox}>
-          <b>채용공고 데이터는 아직 연결되지 않았어요.</b><br />
-          서버에 채용공고 표와 수집 기능이 생기면 이 직무의 공고가 여기에 모여요. 지금은 준비 정보와 체크리스트로 준비할 일을 정리해 보세요.
+          <b>공공기관 공고 중 이 직무와 맞는 모집이 지금은 없어요.</b>
+          <p className="hint" style={{ margin: "4px 0 0" }}>민간 기업 공고는 아래에서 바로 찾아볼 수 있어요.</p>
+          <div className="next-list" style={{ marginTop: 8 }}>
+            {(job.links ?? []).map((l) => <a key={l.url} className="next-btn" href={l.url} target="_blank" rel="noreferrer">{l.label}<small>새 창</small></a>)}
+          </div>
         </div>
       )}
     </section>
+  );
+}
+
+// ───────── 채용공고 한 건 (패널·목록 공용) ─────────
+
+type PostingInfo = NonNullable<ExNode["posting"]>;
+
+/** 학력무관·고졸 가능은 거캠 학생에게 가장 중요한 정보라 초록으로 먼저 (판단기록 D31) */
+function PostingBadges({ o, compact }: { o: PostingInfo; compact?: boolean }) {
+  const list = o.badges ?? [];
+  if (!list.length) return null;
+  return (
+    <span className={"pt-badges" + (compact ? " compact" : "")}>
+      {list.slice(0, compact ? 2 : 4).map((b) => (
+        <span key={b} className={"pt-badge" + (b === "학력무관" || b === "고졸 가능" ? " ok" : b === "신입" ? " new" : "")}>{b}</span>
+      ))}
+    </span>
+  );
+}
+
+function PostingBody({ o, url }: { o: PostingInfo; url: string | null }) {
+  const md = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(5).replace("-", "/") : d);
+  const files = o.files ?? [];
+  return (
+    <div className="pt-body">
+      <dl className="pt-meta">
+        <div><dt>근무지</dt><dd>{o.location}</dd></div>
+        {o.summary && <div><dt>형태</dt><dd>{o.summary}</dd></div>}
+        {o.start && <div><dt>등록</dt><dd>{md(o.start)}</dd></div>}
+        <div><dt>마감</dt><dd>{md(o.deadline)}</dd></div>
+      </dl>
+      {!!o.stages?.length && (
+        <div className="pt-stages" aria-label="전형 단계">
+          {o.stages.map((st, i) => <Fragment key={st}>{i > 0 && <i aria-hidden>›</i>}<span>{st}</span></Fragment>)}
+        </div>
+      )}
+      {o.requirements.length > 0 && <><h5>지원 자격</h5><ul className="pt-req">{o.requirements.slice(0, 3).map((r) => <li key={r}>{r}</li>)}</ul></>}
+      {o.preferred.length > 0 && <><h5>우대</h5><div className="chips">{o.preferred.map((r) => <span key={r} className="chip">{r}</span>)}</div></>}
+      {(url || files.length > 0) && (
+        <div className="pt-actions">
+          {url && <a className="btn sm primary" href={url} target="_blank" rel="noreferrer">원문 보기<Icon name="link" /></a>}
+          {files.filter((f) => f.kind !== "기타").slice(0, 2).map((f) => (
+            <a key={f.url} className="btn sm" href={f.url} target="_blank" rel="noreferrer" title={f.name}>{f.kind} 받기</a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ───────── 대학: 거캠 학생 지원 가능 정보 (판단기록 D37) ─────────
+
+/** 확인된 "가능"만 보여 준다. 대학 단위 "불가"는 말하지 않는다(추출 누락 가능). 대체서식은 참고 + 원문 쪽 */
+function AdmissionBox({ a }: { a?: ExNode["admission"] }) {
+  if (!a) return null;
+  return (
+    <div className={"adm adm-" + a.tone}>
+      <div className="adm-head">
+        <span className="adm-badge">{a.tone === "alt" ? "대안학교 전형" : a.tone === "ok" ? "검정고시 지원 가능" : "모집요강 확인 필요"}</span>
+        {a.badge && a.tone !== "unknown" && <span className="adm-sub">{a.badge}</span>}
+        {a.checkedAt && <span className="adm-date">2027 모집요강 · {a.checkedAt.slice(5).replace("-", "/")} 확인</span>}
+      </div>
+      {a.tracks.length > 0 ? (
+        <ul className="adm-tracks">
+          {a.tracks.map((t) => (
+            <li key={t.track}>
+              <b>{t.track}</b>
+              <span>{[t.altForm && t.altForm !== "없음" ? `대체서식 ${t.altForm}(참고)` : "", t.note].filter(Boolean).join(" · ")}</span>
+              {t.page && <small>{t.page}</small>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="adm-empty">아직 이 대학 모집요강을 읽지 못했어요. 수능(정시)은 고졸 검정고시로 지원할 수 있어요.</p>
+      )}
+      {a.sourceUrl && <a className="adm-src" href={a.sourceUrl} target="_blank" rel="noreferrer">모집요강 원문(PDF) 보기</a>}
+    </div>
   );
 }

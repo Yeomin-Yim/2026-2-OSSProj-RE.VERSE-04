@@ -41,6 +41,10 @@ test("거캠: 칸 나누기 — 과목·날짜, 빈 칸과 머리글은 제외, 
 test("거캠: 과목 이름에서 반 이름을 빼고, '기타'는 과목으로 보지 않는다", () => {
   assert.equal(subjectName("영어(선유반)"), "영어");
   assert.equal(subjectName("수학(꽃게탕)"), "수학");
+  assert.equal(subjectName("국어A반"), "국어");
+  assert.equal(subjectName("과학4반"), "과학");
+  assert.equal(subjectName("사회문화"), "사회문화"); // 뒤에 한글이 이어지면 다른 과목 이름이다
+  assert.equal(subjectName("기술가정"), "기술가정");
   assert.equal(subjectName("기타"), null);
 });
 
@@ -77,4 +81,13 @@ test("거캠: 칸 키 — 날짜·오전/오후·칸 안 순번, 노트 순서�
     "gcam:2026-08-27:pm:0",
     null,
   ]);
+});
+
+test("확인 노트 추천 순서: 팀 말이면 팀 프로젝트, 개주프 말이면 개인주제 프로젝트 (실제 사례)", async () => {
+  const { overlap } = await import("../../lib/server/gcam-import/draft.ts");
+  const team = "초보자 비건 정보 플랫폼 프로젝트", mine = "베이킹 레시피 e북 개주프";
+  const rank = (text: string) => [team, mine].sort((a, b) => overlap(b, text) - overlap(a, text))[0];
+  assert.equal(rank("이그나이트 5분발표, 1학기를 돌아보며 팀 대화를 했다"), team);
+  assert.equal(rank("1차로 했던 현장관찰을 정리하고 AEIOU를 정리했다."), team);
+  assert.equal(rank("개주프를 진행했다 영상 6번째 만들었다"), mine);
 });

@@ -115,6 +115,7 @@ export function postingNodes(job: ExNode, items: Posting[]): ExNode[] {
       requirements: [p.experience, p.education].filter(Boolean),
       preferred: [],
       summary: [p.jobType, p.keywords].filter(Boolean).join(" · ") || "자세한 내용은 사람인 원문에서 확인하세요.",
+      source: "saramin",
     },
   }));
 }

@@ -48,7 +48,14 @@ export function Modal({ title, wide, onClose, children }: Props) {
         aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
       >
-        {title && <h3 id={titleId}>{title}</h3>}
+        {title && (
+          <div className="modal-head">
+            <h3 id={titleId}>{title}</h3>
+            <button type="button" className="modal-x" aria-label="닫기" onClick={onClose}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        )}
         {children}
       </div>
     </div>

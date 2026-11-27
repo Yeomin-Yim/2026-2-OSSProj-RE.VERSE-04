@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoRefresh } from "@/components/ui/AutoRefresh";
 import { after } from "next/server";
 import { afterRecordsChanged, keywordBacklog } from "@/lib/server/keywords/refresh";
 import { buildDemoExplore } from "@/components/explore/demo";
@@ -9,6 +10,7 @@ import { StudentProvider } from "@/components/student/StudentData";
 import { requireUser } from "@/lib/server/auth";
 import { loadDictionary } from "@/lib/server/dictionary";
 import { loadExplore } from "@/lib/server/explore/explore";
+import { projectTexts, refreshSimilar, SIMILAR_RETRY_MS, similarFailedAt, similarHash, type SimilarState } from "@/lib/server/explore/similar";
 import { keywordCategories, tagInfoFor } from "@/lib/server/keywords/meta";
 import { axisOf, isAxisCode, isSubjectProject, regardTags, SELF_CHOSEN } from "@/lib/core/index.ts";
 import { latestRelations } from "@/lib/server/graph";
@@ -98,9 +100,17 @@ export default async function GraphPage({ searchParams }: { searchParams: Promis
   const mineTags = toProjectTags(records).filter((p) => projects.some((q) => q.id === p.id));
   const subject = new Set(projects.filter((p) => isSubjectProject(p.title)).map((p) => p.id));
   const forRec = mineTags.some((p) => !subject.has(p.id)) ? mineTags.filter((p) => !subject.has(p.id)) : mineTags;
+  // "기록과 닮은" 추천: 저장된 결과가 지금 기록과 같으면 그대로, 다르면 뒤에서 다시 계산 (판단기록 D35)
+  const simTexts = demo || backlog ? [] : projectTexts(projects.filter((p) => forRec.some((t) => t.id === p.id)), forRec);
+  const simSaved = (profile.data?.ui_state?.similar ?? null) as SimilarState | null;
+  const simStale = simTexts.length > 0 && simSaved?.hash !== similarHash(simTexts);
+  // 최근 15분 안에 실패했으면 다시 부르지 않는다 (자동 새로고침마다 AI 호출이 반복되지 않게)
+  const simCooling = simStale && Date.now() - similarFailedAt(profile.data?.ui_state) < SIMILAR_RETRY_MS;
+  const simPending = simStale && !simCooling;
+  if (simPending) after(() => refreshSimilar(supabase, userId, simTexts));
   const data = demo
     ? buildDemoExplore(projects)
-    : await loadExplore(supabase, forRec, dict, axisSources, new Set(projects.filter((p) => SELF_CHOSEN.test(p.title)).map((p) => p.id)));
+    : await loadExplore(supabase, forRec, dict, axisSources, new Set(projects.filter((p) => SELF_CHOSEN.test(p.title)).map((p) => p.id)), simSaved);
 
   // 처음 위치: 주소(스크랩에서 이동) > 저장된 마지막 위치 (시연 모드는 항상 처음부터)
   const saved = (profile.data?.ui_state?.career ?? {}) as Partial<ExplorePlace>;
@@ -126,7 +136,21 @@ export default async function GraphPage({ searchParams }: { searchParams: Promis
       )}
       {backlog > 0 && (
         <div className="notice notice-ai" role="status">
-          <span>프로젝트 {backlog}개의 기록에서 키워드를 정리하고 있어요. 1~2분 뒤 새로고침하면 추천이 더 정확해져요.</span>
+          <span className="spinner" aria-hidden="true" />
+          <span>기록 정리 중 · 프로젝트 {backlog}개 남음. 끝나면 추천이 저절로 채워져요.</span>
+          <AutoRefresh />
+        </div>
+      )}
+      {!backlog && simPending && (
+        <div className="notice notice-ai" role="status">
+          <span className="spinner" aria-hidden="true" />
+          <span>{simSaved ? "바뀐 기록으로 '기록과 닮은' 추천을 다시 찾고 있어요." : "커리어넷 학과·직업 1,000여 곳에서 내 기록과 닮은 곳을 찾고 있어요."} 10초쯤 걸려요.</span>
+          <AutoRefresh />
+        </div>
+      )}
+      {!backlog && simCooling && (
+        <div className="notice" role="status">
+          <span>'기록과 닮은' 추천을 지금은 만들지 못했어요. 잠시 뒤 이 화면을 다시 열면 다시 찾아볼게요.</span>
         </div>
       )}
       <StudentProvider initialScraps={scraps} initialTodos={todos} readOnly={demo}>
