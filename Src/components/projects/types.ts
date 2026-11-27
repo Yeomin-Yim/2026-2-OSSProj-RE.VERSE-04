@@ -6,4 +6,4 @@ export type { AiOverview, Overview, ProjectRow, RecordView };
 export type Checks = Record<CheckKey, boolean>;
 export type Guide = { key: CheckKey; question: string; hint: string; action: "edit" | "answer" | "upload"; cta: string };
 export type TagInfo = Record<string, { label: string; group: TagGroup }>;
-export type TabKey = "files" | "gnotes" | "overview" | "log" | "result";
+export type TabKey = "files" | "gnotes" | "overview" | "result";

@@ -60,7 +60,7 @@ export default async function ProjectPage({ params, searchParams }: {
       tagInfo={tagInfo}
       userName={userName}
       graphNotes={graphNotes}
-      initialTab={tab === "gnotes" || tab === "overview" || tab === "log" || tab === "result" ? tab : "files"}
+      initialTab={tab === "gnotes" || tab === "overview" || tab === "result" ? tab : "files"}
     />
     </StudentProvider>
   );

@@ -42,7 +42,7 @@ export function ProjectsView(props: Props) {
   // 연결 그래프에서 이 프로젝트에 연결한 노트 (graph_notes)
   const gnotesOf = (pid: string) => props.graphNotes.filter((n) => n.project_ids.includes(pid));
   const myNotes = [...gnotesOf(project.id)].sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
-  const TABS: [TabKey, string][] = [["files", "자료"], ["gnotes", "연결 노트" + (myNotes.length ? " " + myNotes.length : "")], ["overview", "개요"], ["log", "진행 기록"], ["result", "결과"]];
+  const TABS: [TabKey, string][] = [["files", "자료"], ["gnotes", "연결 노트" + (myNotes.length ? " " + myNotes.length : "")], ["overview", "개요"], ["result", "결과"]];
   const [modal, setModal] = useState<"new" | "edit" | "note" | "import" | null>(null);
   const [addKind, setAddKind] = useState<AddKind>("file");
   const openAdd = (kind: AddKind) => { setAddKind(kind); setModal("note"); };
@@ -136,7 +136,6 @@ export function ProjectsView(props: Props) {
             </>
           )}
           {tab === "overview" && <OverviewTab projectId={project.id} overview={overview} ai={props.aiOverview} records={records} />}
-          {tab === "log" && noteList(oldestFirst.filter((r) => !r.is_result), "진행 기록이 없어요.")}
           {tab === "result" && (
             <>
               {overview.result && (
