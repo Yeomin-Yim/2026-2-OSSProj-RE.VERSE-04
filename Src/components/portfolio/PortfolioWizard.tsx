@@ -9,14 +9,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { draftProject, savePortfolio } from "@/app/(app)/portfolio/actions";
+import { draftProject, refineText, savePortfolio } from "@/app/(app)/portfolio/actions";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
 import {
-  CHECK_LABEL, CHECK_ORDER, PROJECT_SECTIONS, TEMPLATES, altRow, draftFromOverview, emptyAltRow, emptyDraft, emptyProfile, period, promptsFor, templateList, topTags,
-  type AltRow, type CheckKey, type PortfolioSource, type ProfileDraft, type ProjectDraft, type TemplateId,
+  CHECK_LABEL, CHECK_ORDER, PROJECT_SECTIONS, REFINE_LABEL, TEMPLATES, wordDiff, altRow, draftFromOverview, emptyAltRow, emptyDraft, emptyProfile, period, promptsFor, templateList, topTags,
+  type AltRow, type CheckKey, type PortfolioSource, type ProfileDraft, type ProjectDraft, type RefineMode, type TemplateId,
 } from "@/lib/core/index.ts";
 import type { ProjectRow } from "@/lib/server/projects";
 import type { Portfolio } from "@/lib/server/student/portfolio";
@@ -58,6 +58,11 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
   const [flash, setFlash] = useState(false);
   const [building, setBuilding] = useState(false);
   const [drafting, setDrafting] = useState(false);
+  // 문장 다듬기: 마지막으로 만진 섹션의 textarea 와 그 선택 범위를 쓴다 (프로토타입 focusSec)
+  const areas = useRef<Partial<Record<keyof ProjectDraft, HTMLTextAreaElement | null>>>({});
+  const focusSec = useRef<keyof ProjectDraft>("problem");
+  const [refining, setRefining] = useState<RefineMode | null>(null);
+  const [diff, setDiff] = useState<{ mode: RefineMode; pid: string; sec: keyof ProjectDraft; secName: string; start: number; end: number; original: string; text: string; changed: boolean } | null>(null);
 
   // ───── 주소의 ?step 을 맞춘다 (뒤로 가기 대신 단계 표시를 눌러 이동)
   const setStep = (s: Step) => {
@@ -256,6 +261,44 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
     setContent(next); queue({ content: next });
     toast("AI 초안으로 바꿨어요 · 기록과 다른 곳이 없는지 확인해 주세요");
   }
+  async function refine(mode: RefineMode) {
+    const pid = cur, sec = focusSec.current, t = areas.current[sec];
+    const value = content[pid]?.[sec] ?? "";
+    const a = t?.selectionStart ?? 0, b = t?.selectionEnd ?? 0, whole = !(b > a);
+    const start = whole ? 0 : a, end = whole ? value.length : b, original = value.slice(start, end);
+    if (!original.trim()) return toast("다듬을 문장이 없어요. 먼저 내용을 적어 주세요.");
+    setRefining(mode); setDiff(null);
+    const r = await refineText(mode, original);
+    setRefining(null);
+    if (!r.ok) return toast("다듬지 못했어요: " + r.message);
+    const secName = TEMPLATES["portfolio-project"].sections.find((x) => x.key === sec)?.label ?? sec;
+    setDiff({ mode, pid, sec, secName, start, end, original, text: r.data.text, changed: r.data.changed });
+  }
+  function applyDiff() {
+    if (!diff) return;
+    const now = content[diff.pid]?.[diff.sec] ?? "";
+    // 제안을 받는 사이에 글을 고쳤으면 위치가 어긋나므로 덮어쓰지 않는다
+    if (now.slice(diff.start, diff.end) !== diff.original) { setDiff(null); return toast("그사이 글이 바뀌었어요. 다시 눌러 주세요."); }
+    const lead = diff.original.match(/^\s*/)![0], trail = diff.original.match(/\s*$/)![0];
+    setDraft(diff.pid, diff.sec, now.slice(0, diff.start) + lead + diff.text + trail + now.slice(diff.end));
+    setDiff(null);
+    toast("적용했어요 · 문장을 한 번 더 읽어보세요");
+  }
+  function diffCard() {
+    if (!diff || diff.pid !== cur) return null;
+    const label = REFINE_LABEL[diff.mode];
+    if (!diff.changed) return (
+      <div className="diff-card"><div className="dh"><span>{label}</span></div><div className="nochg">더 다듬을 부분이 없어요.</div>
+        <div className="modal-actions"><button className="btn sm" onClick={() => setDiff(null)}>확인</button></div></div>
+    );
+    return (
+      <div className="diff-card">
+        <div className="dh"><span>{label} · {diff.secName}</span><span className="hint">새 제안은 확인 후 적용</span></div>
+        <div>{wordDiff(diff.original.trim(), diff.text).map((p, i) => p.op === "del" ? <del key={i}>{p.s}</del> : p.op === "ins" ? <ins key={i}>{p.s}</ins> : <span key={i}>{p.s}</span>)}</div>
+        <div className="modal-actions"><button className="btn sm" onClick={() => setDiff(null)}>취소</button><button className="btn primary sm" onClick={applyDiff}>적용</button></div>
+      </div>
+    );
+  }
   function fillFromOverview(pid: string, k: keyof ProjectDraft) {
     const v = draftFromOverview(sources[pid].overview)[k];
     if (!v) return toast("개요에 이 항목이 비어 있어요. 프로젝트 관리 → 개요에서 먼저 적어 주세요.");
@@ -376,7 +419,7 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
                   </h4>
                   <div className="g">{sec.guide}</div>
                   <div className="ta">
-                    <textarea rows={8} maxLength={MAX} value={v} placeholder="아직 비어 있어요. 오른쪽 참고 기록을 보며 직접 적어 보세요." onChange={(e) => setDraft(cur, k, e.target.value)} />
+                    <textarea rows={8} maxLength={MAX} value={v} ref={(el) => { areas.current[k] = el; }} onFocus={() => { focusSec.current = k; }} placeholder="아직 비어 있어요. 오른쪽 참고 기록을 보며 직접 적어 보세요." onChange={(e) => setDraft(cur, k, e.target.value)} />
                     <span className="cnt">{v.length} / {MAX}</span>
                   </div>
                 </div>
@@ -385,11 +428,14 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
             {prompts([["portfolio-project", [s]]], true)}
           </div>
           <div className="col-right"><div className="card panel">
-            <div className="right-title" style={{ color: "var(--text)" }}><Icon name="rewrite" /> 문장 다듬기 <span className="badge-ai">AI 미연결</span></div>
-            <div className="sub" style={{ fontSize: 11, margin: "3px 0 12px" }}>AI 문장 다듬기는 서버에 연결되면 쓸 수 있어요.</div>
-            {([["scissors", "더 간결하게"], ["user", "내 역할 중심으로"], ["rewrite", "선택 부분 다시 쓰기"]] as const).map(([ic, label]) => (
-              <button key={label} className="ai-btn" disabled title="AI 미연결" style={{ opacity: 0.55, cursor: "not-allowed" }}><Icon name={ic} />{label}<Icon name="chevR" /></button>
+            <div className="right-title" style={{ color: "var(--text)" }}><Icon name="rewrite" /> 문장 다듬기 <span className="badge-ai">AI</span></div>
+            <div className="sub" style={{ fontSize: 11, margin: "3px 0 12px" }}>문장을 선택하고 눌러보세요. 선택하지 않으면 마지막으로 쓴 섹션 전체를 다듬어요.</div>
+            {([["concise", "scissors", "더 간결하게"], ["role", "user", "내 역할 중심으로"], ["rewrite", "rewrite", "선택 부분 다시 쓰기"]] as const).map(([mode, ic, label]) => (
+              <button key={mode} className="ai-btn" disabled={!!refining} onMouseDown={(e) => e.preventDefault()} onClick={() => refine(mode)}>
+                {refining === mode ? <span className="spinner" /> : <Icon name={ic} />}{label}<Icon name="chevR" />
+              </button>
             ))}
+            {diffCard()}
             <h2 style={{ margin: "16px 0 4px", fontSize: 13 }}>참고할 기록</h2>
             {s.records.length ? s.records.slice(0, 8).map((r) => (
               <button key={r.id} className="ref-row" onClick={() => setViewRecord({ title: r.title, text: r.text })}>

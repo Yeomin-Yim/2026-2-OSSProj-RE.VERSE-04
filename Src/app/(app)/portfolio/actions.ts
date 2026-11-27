@@ -2,7 +2,8 @@
 
 import { requireUser } from "@/lib/server/auth";
 import { savePortfolio as save, type PortfolioPatch } from "@/lib/server/student/portfolio";
-import { draftProject as draft } from "@/lib/server/student/portfolio-ai";
+import { draftProject as draft, refineText as refine } from "@/lib/server/student/portfolio-ai";
+import type { RefineMode } from "@/lib/core/index.ts";
 
 /** 포트폴리오 저장 (portfolios 표). 처음 저장이면 새 줄을 만들고 id 를 돌려준다. */
 export async function savePortfolio(id: string | null, patch: PortfolioPatch) {
@@ -22,5 +23,15 @@ export async function draftProject(portfolioId: string, projectId: string) {
     return { ok: true as const, data: await draft(supabase, portfolioId, projectId) };
   } catch (e) {
     return { ok: false as const, message: e instanceof Error ? e.message : "초안을 만들지 못했어요." };
+  }
+}
+
+/** ✦ 문장 다듬기: 제안만 돌려준다 (저장 없음). 원문에 없는 숫자·영문이 생기면 실패로 돌려준다 */
+export async function refineText(mode: RefineMode, text: string) {
+  await requireUser();
+  try {
+    return { ok: true as const, data: await refine(mode, String(text).slice(0, 1000)) };
+  } catch (e) {
+    return { ok: false as const, message: e instanceof Error ? e.message : "다듬지 못했어요." };
   }
 }
