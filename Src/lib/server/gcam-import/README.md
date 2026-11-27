@@ -41,6 +41,25 @@ const done = await confirmImport(s.id, editedDraft);   // done.message: "노트 
 
 새로고침해서 화면이 처음으로 돌아가도, 가져오기 `id`를 기억해 두었다면 `getImport(id)`로 이어서 열 수 있습니다.
 
+## 프로젝트가 아닌 기록을 나누는 방법 (2026-11-27 개편)
+
+예전에는 학생회·체육·강연까지 모두 '애매한 노트'로 넘겨서, 학생이 한 학기 30개 안팎을 하나씩 골라야 했다.
+지금은 AI 가 종류(kind)만 고르고 코드가 자리를 정한다 (`group.ts` 프롬프트, `draft.ts`).
+
+| AI 가 고른 종류 | 자리 | 학생에게 묻나 |
+|---|---|---|
+| `school` 학교생활·행사 | 일반 활동 | 아니요 (접어 둠) |
+| `class` 교과 수업 (+subject) | 그 과목 프로젝트 | 아니요 |
+| `empty` 활동이 없던 날 | 저장 안 함 (`skipped`) | 아니요 (되살릴 수 있음) |
+| `unsure` 정말 애매함 | 학생이 고름 | **예**, 추천 후보 버튼 |
+
+코드 안전장치
+- `school` 인데 제목에 인터뷰·리서치·팀 회의·발표 준비·프로토타입 같은 말이 있으면 `unsure` 로 올린다. 묻지 않고 넘어가는 칸이라, 잘못 들어가면 학생이 놓치기 때문이다.
+- AI 가 빠뜨린 칸은 규칙으로 먼저 정한다: 행사 말이면 school, 아파서·결석이면 skipped, 아니면 unsure.
+- unsure 에 후보가 없으면, 그날 진행 중이던 프로젝트와 노트 글에 겹치는 말(개주프·영상 …)로 추천을 단다.
+
+시험 (학생 5명): 확인할 노트가 13~24개에서 0~4개로 줄었다 (`zz_local/gschool/compare_draft.ts`).
+
 ## 초안(draft) 모양
 
 ```jsonc
@@ -54,8 +73,13 @@ const done = await confirmImport(s.id, editedDraft);   // done.message: "노트 
       "questions": []                             // AI가 학생에게 확인하고 싶은 것 (보여 주기만)
     }
   ],
-  "unassigned": [                                 // 어느 프로젝트인지 애매한 노트
-    { "title": "…", "date": "2026-10-01", "unit_ids": ["U0070"], "candidates": ["프로젝트 제목"], "question": "어느 프로젝트의 기록인가요?" }
+  "unassigned": [                                 // 프로젝트가 아닌 노트. 옮기지 않으면 '일반 활동'에 저장
+    // kind "school": 학교생활·행사 (학생에게 묻지 않음, 화면에서 접어 둠)
+    // kind "unsure": 정말 애매함 → 화면 맨 위 '골라 주세요' 카드. candidates 첫째가 추천 (AI 후보, 없으면 날짜·겹치는 말로 코드가 찾음)
+    { "title": "…", "date": "2026-10-01", "unit_ids": ["U0070"], "kind": "unsure", "candidates": ["프로젝트 제목"], "question": "이 인터뷰는 …의 리서치였나요?" }
+  ],
+  "skipped": [                                    // 활동이 없던 날(아파서·결석·"딱히 없음"). 저장하지 않지만 화면에서 '그래도 저장' 가능
+    { "title": "…", "date": "…", "unit_ids": ["…"], "reason": "활동이 없던 날" }
   ],
   "general_project_id": "uuid 또는 null",         // 학생의 '일반 활동' 프로젝트
   "excluded": [{ "unit_ids": ["U0001"], "reason": "머리글·빈 칸·마지막 수정" }]   // 저장하지 않는 부분

@@ -43,8 +43,12 @@ const OCR_SCHEMA = {
   },
 };
 
+type Effort = Parameters<typeof callJson>[3];
+/** 글자 옮기기는 생각할 거리가 거의 없다 (속도 시험: zz_local/gschool/ocr_speed.ts) */
+const OCR_EFFORT = (process.env.OPENAI_OCR_EFFORT as Effort) || "none";
+
 /** [from, to] 쪽(1부터, 양끝 포함)을 OCR 한다. */
-export async function ocrPages(pdf: Uint8Array, from: number, to: number) {
+export async function ocrPages(pdf: Uint8Array, from: number, to: number, effort: Effort = OCR_EFFORT) {
   const doc = await PDFDocument.load(pdf);
   const images = range(from, to).flatMap((page) => [
     { type: "input_text", text: `page ${page}` },
@@ -53,7 +57,7 @@ export async function ocrPages(pdf: Uint8Array, from: number, to: number) {
   const { json, usage } = await callJson<{ units: OcrUnit[] }>("ocr", OCR_SCHEMA, [
     { type: "input_text", text: OCR_PROMPT },
     ...images,
-  ]);
+  ], effort);
   return { units: json.units, usage: { ...usage, pages: [from, to] as [number, number] } };
 }
 

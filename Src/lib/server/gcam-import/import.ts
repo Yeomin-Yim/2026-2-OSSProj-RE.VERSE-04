@@ -10,9 +10,9 @@ import { ocrPages, pageCount, type OcrUnit } from "./ocr";
 
 const BUCKET = "records";
 /** OCR 한 번에 보내는 쪽 수 (10쪽 ≈ 20초) */
-const BATCH = 10;
+const BATCH = 1; // 쪽마다 따로 보내 동시에 읽는다 (10쪽: 한 번에 18초 → 1쪽씩 4초, 판단기록 D22)
 /** stepImport 한 번에 동시에 보내는 OCR 호출 수. 30쪽 ≈ 25초 */
-const PARALLEL = 3;
+const PARALLEL = 24;
 /** 비용 상한 (120쪽 ≈ $0.45). 한 학기 회고록은 40~75쪽 */
 const MAX_PAGES = 120;
 

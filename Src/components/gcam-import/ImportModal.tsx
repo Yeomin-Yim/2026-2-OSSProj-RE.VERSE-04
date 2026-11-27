@@ -15,7 +15,7 @@ import type { ImportView } from "@/lib/server/gcam-import/import";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { DraftEditor, type Removed } from "./DraftEditor";
+import { DraftEditor, needsAnswer, type Removed } from "./DraftEditor";
 
 const RESUME_KEY = "reverse.gcam-import-id";
 const MAX_BYTES = 30 * 1024 * 1024; // README: 30MB까지
@@ -158,7 +158,7 @@ export function ImportModal({ myProjects, onClose }: Props) {
     const problem = validate(draft);
     setSaveError(problem);
     if (problem) return;
-    if (draft.unassigned.length) setPhase({ k: "confirm" });
+    if (draft.unassigned.some(needsAnswer)) setPhase({ k: "confirm" });
     else void save();
   }
 
@@ -193,7 +193,7 @@ export function ImportModal({ myProjects, onClose }: Props) {
   const counts = draft && {
     projects: draft.projects.filter((p) => p.notes.length).length,
     notes: draft.projects.reduce((s, p) => s + p.notes.length, 0) + draft.unassigned.length,
-    unassigned: draft.unassigned.length,
+    unassigned: draft.unassigned.filter(needsAnswer).length,
   };
 
   return (
@@ -291,9 +291,8 @@ export function ImportModal({ myProjects, onClose }: Props) {
       {/* ───── 미리보기 · 수정 */}
       {(phase.k === "review" || phase.k === "confirm" || phase.k === "saving") && draft && view && counts && (
         <>
-          <p className="imp-summary">
-            <b>{view.file_name}</b>에서 프로젝트 <b>{counts.projects}</b>개, 노트 <b>{counts.notes}</b>개를 찾았어요
-            {counts.unassigned ? <> · 미분류 <b className="warn">{counts.unassigned}</b>개</> : null}. 저장하기 전에 확인하고 고쳐 주세요.
+          <p className="imp-summary" title={view.file_name}>
+            노트 <b>{counts.notes}</b>개를 정리했어요{counts.unassigned ? <> · <b className="warn">{counts.unassigned}</b>개만 골라 주세요</> : null}
           </p>
           <fieldset className="imp-fieldset" disabled={phase.k !== "review"}>
             <DraftEditor
@@ -308,12 +307,12 @@ export function ImportModal({ myProjects, onClose }: Props) {
           <div className="imp-foot">
             {saveError && <p className="imp-error" role="alert">{saveError}</p>}
             {phase.k === "confirm" ? (
-              <div className="imp-confirm" role="alertdialog" aria-label="미분류 노트 확인">
+              <div className="imp-confirm" role="alertdialog" aria-label="확인 필요 노트">
                 <p>
-                  미분류 노트 <b>{counts.unassigned}개</b>는 <b>&apos;일반 활동&apos;</b> 프로젝트에 저장돼요. 이대로 저장할까요?
+                  아직 고르지 않은 노트 <b>{counts.unassigned}개</b>는 <b>&apos;일반 활동&apos;</b> 프로젝트에 저장돼요. 나중에 옮길 수도 있어요. 이대로 저장할까요?
                 </p>
                 <div className="modal-actions">
-                  <button className="btn" onClick={() => setPhase({ k: "review" })}>돌아가서 배정하기</button>
+                  <button className="btn" onClick={() => setPhase({ k: "review" })}>돌아가서 고르기</button>
                   <button className="btn primary" onClick={() => void save()}>이대로 저장</button>
                 </div>
               </div>

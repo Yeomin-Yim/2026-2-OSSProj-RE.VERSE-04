@@ -587,3 +587,8 @@ button.chip:hover{filter:brightness(.96)}
 .pf-essay{margin-bottom:30px}.pf-essay h4{margin:0 0 12px;padding-bottom:7px;border-bottom:1.5px solid var(--navy);font-size:14px;color:var(--navy)}.pf-essay p{margin:0;font-size:12.5px;line-height:1.8;color:#333;white-space:pre-wrap;word-break:keep-all}
 .pf-brand{position:absolute;right:22px;bottom:16px;font-size:10px;font-weight:800;color:#b5b8c2}
 @media print{.pf-page{border:0;box-shadow:none;aspect-ratio:auto;min-height:180mm}.pf-doc{gap:0}.af-sheet{border:0;box-shadow:none;max-width:none;margin:0;padding:0}}
+
+/* 추천 관점 탭 (종합 / 많이 해 온 것 / 깊게 해 본 것 / 관심 있을 만한 것) */
+.lens-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.lens-tabs .tool-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.lens-tabs .tool-btn:disabled { opacity: .4; cursor: default; }

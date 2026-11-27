@@ -3,7 +3,7 @@
 
 import { checkAssignment, parseSessions, resolveAssignment, type GcamUnit, type Session } from "../../core/gcam-import/gcam.ts";
 import type { Usage } from "../openai.ts";
-import { groupSessions, type ExistingProject } from "./group.ts";
+import { CLASS_SUBJECTS, groupSessions, type ExistingProject } from "./group.ts";
 
 export interface DraftNote {
   title: string;
@@ -25,8 +25,14 @@ export const GENERAL_PROJECT = "일반 활동";
 
 export interface Draft {
   projects: DraftProject[];
-  /** 학생이 확정 전 팝업에서 다른 프로젝트로 옮길 수 있다. 옮기지 않으면 '일반 활동'으로 저장 */
-  unassigned: (DraftNote & { candidates: string[]; question: string })[];
+  /**
+   * 프로젝트가 아닌 노트. 옮기지 않으면 '일반 활동'으로 저장한다.
+   *   kind school: 학교생활·행사 (묻지 않음) · unsure: 학생에게 확인 (candidates 첫째가 추천)
+   *   kind 가 없으면(이전 초안) unsure 로 본다
+   */
+  unassigned: (DraftNote & { candidates: string[]; question: string; kind?: "school" | "unsure" })[];
+  /** 활동이 없던 날(아픔·결석·"딱히 없음"). 저장하지 않지만 화면에서 되살릴 수 있다 */
+  skipped?: (DraftNote & { reason: string })[];
   /** 학생의 기존 '일반 활동' 프로젝트. null 이면 확정할 때 새로 만든다 */
   general_project_id: string | null;
   excluded: { unit_ids: string[]; reason: string }[];
@@ -38,6 +44,7 @@ export interface Draft {
  */
 export async function buildDraft(units: GcamUnit[], existing: ExistingProject[]) {
   const { sessions, dropped } = parseSessions(units);
+  const unitText = new Map(units.map((u) => [u.id, u.text]));
   const sessionOf = new Map(sessions.flatMap((s) => s.units.map((u) => [u.id, s] as const)));
   const firstDate = (ids: string[]) => sessionOf.get(ids[0])?.date ?? null;
   /** 단위 목록을 칸별로 나눈다 (칸 순서 유지) */
@@ -46,6 +53,7 @@ export async function buildDraft(units: GcamUnit[], existing: ExistingProject[])
   const draft: Draft = {
     projects: [],
     unassigned: [],
+    skipped: [],
     general_project_id: existing.find((p) => p.title.trim() === GENERAL_PROJECT)?.id ?? null,
     excluded: [{ unit_ids: dropped, reason: "머리글·빈 칸·마지막 수정" }],
   };
@@ -63,6 +71,7 @@ export async function buildDraft(units: GcamUnit[], existing: ExistingProject[])
 
   // ② 나머지 칸 → AI
   const rest = sessions.filter((s) => !s.subject);
+  const restIds = new Set(rest.flatMap((s) => s.units.map((u) => u.id)));
   const usage: Usage[] = [];
   if (rest.length) {
     // 과목·일반 활동 프로젝트는 코드 담당이라 AI 에게 보이지 않는다 (보이면 '기타' 칸을 '국어'에 붙이곤 했다)
@@ -91,25 +100,100 @@ export async function buildDraft(units: GcamUnit[], existing: ExistingProject[])
         questions: p.questions,
       });
     }
+    // 종류에 따라 자리를 정한다: 교과 수업 → 과목 프로젝트 · 활동 없는 날 → 저장 안 함 · 학교생활 → 일반 활동(묻지 않음) · 애매함 → 학생 확인
+    const titles = new Set([...draft.projects.map((p) => p.title.trim()), ...aiExisting.map((p) => p.title.trim())]);
     for (const n of json.unassigned) {
-      for (const ids of bySession(next())) draft.unassigned.push({ ...n, unit_ids: ids, date: firstDate(ids) });
+      for (const ids of bySession(next())) {
+        const note = { title: n.title, date: firstDate(ids), unit_ids: ids };
+        const subject = n.kind === "class" ? classSubject(n.subject) : null;
+        if (subject) addToSubject(draft, existing, subject, note);
+        else if (n.kind === "empty") draft.skipped!.push({ ...note, reason: "활동이 없던 날" });
+        else if (n.kind === "school" || n.kind === "class") draft.unassigned.push({ ...note, kind: "school", candidates: [], question: "" });
+        else {
+          // 후보는 실제로 있는 프로젝트 이름만 (없는 이름을 추천하지 않게)
+          const candidates = n.candidates.map((c) => c.trim()).filter((c) => titles.has(c));
+          draft.unassigned.push({ ...note, kind: "unsure", candidates, question: n.question });
+        }
+      }
     }
     for (const e of json.excluded) draft.excluded.push({ ...e, unit_ids: next() });
     for (const m of missing) {
-      draft.unassigned.push({ title: firstLine(m.session), date: m.session.date, unit_ids: m.ids, candidates: [], question: "어느 프로젝트의 기록인가요?" });
+      // AI 가 빠뜨린 칸: 뚜렷한 말이 있으면 규칙으로 자리를 정하고, 아니면 학생에게 묻는다
+      const note = { title: firstLine(m.session), date: m.session.date, unit_ids: m.ids };
+      const text = m.session.units.map((u) => u.text).join(" ");
+      if (EMPTY_DAY.test(text) && text.length < 120) draft.skipped!.push({ ...note, reason: "활동이 없던 날" });
+      else if (SCHOOL_EVENT.test(note.title) && !PROJECT_FLOW.test(note.title)) draft.unassigned.push({ ...note, kind: "school", candidates: [], question: "" });
+      else draft.unassigned.push({ ...note, kind: "unsure", candidates: [], question: "어느 프로젝트의 기록인가요?" });
     }
 
     // 바로잡은 뒤에는 모든 단위가 정확히 한 번이어야 한다 (어기면 코드 버그)
-    const all = [...draft.projects.filter((p) => p.origin === "ai").flatMap((p) => p.notes), ...draft.unassigned, ...draft.excluded.slice(1)];
+    const fromAi = (n: DraftNote) => n.unit_ids.every((id) => restIds.has(id));
+    const all = [...draft.projects.flatMap((p) => p.notes).filter(fromAi), ...draft.unassigned, ...draft.skipped!, ...draft.excluded.slice(1)];
     const left = checkAssignment(rest.flatMap((s) => s.units.map((x) => x.id)), all.map((g) => g.unit_ids));
     if (left.length) throw new Error(`초안 검증 실패: ${left.slice(0, 3).join(", ")}`);
   }
+  // 안전장치 (판단기록 G1): 학교생활로 분류됐어도 프로젝트 진행 말이 있으면 학생에게 확인한다 (묻지 않고 넘어가는 칸이라 잘못 들어가면 놓친다)
+  for (const n of draft.unassigned) if (n.kind === "school" && PROJECT_FLOW.test(n.title) && !SCHOOL_EVENT.test(n.title)) Object.assign(n, { kind: "unsure", question: "프로젝트 진행 기록 같아요. 어느 프로젝트에 둘까요?" });
+  // 확인할 노트에 후보가 없으면, 그날 진행 중이던 프로젝트를 날짜로 찾아 추천한다
+  const textOf = (ids: string[]) => ids.map((id) => unitText.get(id) ?? "").join(" ");
+  for (const n of draft.unassigned) if (n.kind === "unsure" && !n.candidates.length) n.candidates = activeProjects(draft, n.date, `${n.title} ${textOf(n.unit_ids)}`);
   // 바로잡는 과정에서 단위를 모두 잃은 노트는 뺀다
   for (const p of draft.projects) p.notes = p.notes.filter((n) => n.unit_ids.length);
   draft.projects = draft.projects.filter((p) => p.notes.length);
   draft.unassigned = draft.unassigned.filter((n) => n.unit_ids.length);
+  draft.skipped = draft.skipped!.filter((n) => n.unit_ids.length);
+  // 과목 노트는 날짜순 (오후 칸에서 온 과목 노트가 섞여 들어오므로)
+  for (const p of draft.projects) if (p.origin === "subject") p.notes.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
   draft.excluded = draft.excluded.filter((e) => e.unit_ids.length);
   return { draft, usage };
+}
+
+/** 프로젝트 진행 단계로 보이는 말 (학교생활 안전장치) */
+const PROJECT_FLOW = /인터뷰|리서치|설문|현장\s?관찰|팀\s?(활동|회의|대화|프로젝트|빌딩)|발표\s?(준비|리허설|대본|연습)|팀\s?발표|포스터|부스\s?준비|프로토타입|시제품|(중간|종합|1차|2차)\s?피드백|피드백\s?반영|문제\s?(정의|해결)|아이디어|솔루션|중간\s?발표|종피/u;
+/** 프로젝트 말이 있어도 학교 행사인 것 */
+const SCHOOL_EVENT = /목표\s?설정|부스\s?체험|총회|학생\s?자치|자치회|오리엔테이션|\bOT\b|설명회|강연|특강|체육\s?대회|운동회|소풍|현장\s?체험|축제/u;
+/** 활동이 없던 날 */
+const EMPTY_DAY = /아파서|아팠|병\s?조퇴|조퇴|결석|쉬는\s?날|딱히\s?없|한\s?(것|게)\s?없|기록할\s?(것|게)\s?없/u;
+
+const PERSONAL_WORDS = /개주프|개인\s?주제|개인\s?성장|나를\s?찾는/u;
+/** 제목의 말(두 글자 이상) 중 노트 글에 나오는 수. 개주프 노트는 개인주제 프로젝트와 강하게 맞춘다 */
+function overlap(projectTitle: string, text: string): number {
+  const words = projectTitle.split(/[\s·,()]+/).filter((w) => w.length >= 2 && !/프로젝트|팀|문제|해결/.test(w));
+  const hits = words.filter((w) => text.includes(w)).length;
+  return hits + (PERSONAL_WORDS.test(text) && PERSONAL_WORDS.test(projectTitle) ? 3 : 0) - (PERSONAL_WORDS.test(text) && !PERSONAL_WORDS.test(projectTitle) ? 1 : 0);
+}
+
+/** 그 날짜 앞뒤(7일)에 노트가 있는 AI 프로젝트 제목. 노트 글과 겹치는 말이 많은 순, 같으면 날짜가 가까운 순 */
+function activeProjects(draft: Draft, date: string | null, text = "", max = 2): string[] {
+  const day = (d: string) => Date.parse(d) / 86_400_000;
+  const scored = draft.projects
+    .filter((p) => p.origin === "ai" && p.notes.length)
+    .map((p) => {
+      const ds = p.notes.map((n) => n.date).filter((d): d is string => !!d).map(day);
+      if (!date || !ds.length) return { title: p.title, gap: 1000 - p.notes.length, words: overlap(p.title, text) };
+      const t = day(date), lo = Math.min(...ds), hi = Math.max(...ds);
+      const gap = t >= lo && t <= hi ? Math.min(...ds.map((x) => Math.abs(x - t))) / 100 : Math.min(Math.abs(t - lo), Math.abs(t - hi));
+      return { title: p.title, gap, words: overlap(p.title, text) };
+    })
+    .filter((x) => !date || x.gap <= 7 || x.words >= 2)
+    .sort((a, b) => b.words - a.words || a.gap - b.gap);
+  return scored.slice(0, max).map((x) => x.title);
+}
+
+/** AI 가 고른 과목 이름 → 과목 프로젝트 이름 (모르는 과목이면 null: 학교생활로 둔다) */
+function classSubject(raw: string | null): string | null {
+  const s = (raw ?? "").replace(/\s|수업|시간/g, "");
+  return (CLASS_SUBJECTS as readonly string[]).find((x) => s.startsWith(x)) ?? null;
+}
+
+/** 과목 프로젝트에 노트를 더한다. 이번 초안에 없으면 만든다 (같은 이름의 기존 프로젝트가 있으면 거기에 이어서) */
+function addToSubject(draft: Draft, existing: ExistingProject[], subject: string, note: DraftNote) {
+  let project = draft.projects.find((p) => p.origin === "subject" && p.title === subject);
+  if (!project) {
+    project = { title: subject, existing_project_id: existing.find((p) => p.title.trim() === subject)?.id ?? null, origin: "subject", notes: [], questions: [] };
+    draft.projects.push(project);
+  }
+  project.notes.push(note);
 }
 
 /** AI 입력: "[S3] 2026-08-27 오후" + "U0042 내용" 줄들 */
