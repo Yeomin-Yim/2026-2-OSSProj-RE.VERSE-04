@@ -22,7 +22,7 @@ export async function callJson<T>(
   stage: string,
   schema: object,
   content: object[],
-  effort: "low" | "medium" = "low",
+  effort: "none" | "minimal" | "low" | "medium" = "low",
 ): Promise<{ json: T; usage: Usage }> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("OPENAI_API_KEY 가 설정되지 않았어요.");
@@ -76,7 +76,8 @@ export async function embedTexts(texts: string[]): Promise<{ vectors: number[][]
   const vectors: number[][] = [];
   let tokens = 0;
   for (let i = 0; i < texts.length; i += 500) {
-    const input = texts.slice(i, i + 500).map((t) => t.trim() || " ");
+    // 한 글이 임베딩 한도(8,192토큰)를 넘지 않게 자른다 (한국어 기준 넉넉히 5,000자)
+    const input = texts.slice(i, i + 500).map((t) => t.trim().slice(0, 5000) || " ");
     for (let attempt = 0; ; attempt++) {
       const res = await fetch("https://api.openai.com/v1/embeddings", {
         method: "POST",

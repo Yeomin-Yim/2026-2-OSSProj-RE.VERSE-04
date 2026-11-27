@@ -32,22 +32,33 @@ export function fingerprint(records: RecordView[]): string {
   return hash([PIPELINE_VERSION, JUDGE_VERSION, ...hashes].join("|"));
 }
 
-export async function refreshKeywords(db: Db): Promise<{ processed: number; skipped: number }> {
-  if (!process.env.OPENAI_API_KEY || matchingMode(process.env.RECORD_MATCHING) === "rules") return { processed: 0, skipped: 0 };
+const keywordsOn = () => !!process.env.OPENAI_API_KEY && matchingMode(process.env.RECORD_MATCHING) !== "rules";
 
-  const [projects, records, runs] = await Promise.all([
-    listProjects(db),
-    listRecords(db),
+/** 기록이 바뀌었는데 키워드를 아직 다시 정리하지 않은 프로젝트들 */
+async function pendingProjects(db: Db, projects?: Awaited<ReturnType<typeof listProjects>>, records?: RecordView[]) {
+  const [ps, rs, runs] = await Promise.all([
+    projects ?? listProjects(db),
+    records ?? listRecords(db),
     db.from("keyword_runs").select("project_id, fingerprint, created_at").order("created_at", { ascending: false }).limit(500),
   ]);
   if (runs.error) throw new Error(runs.error.message);
   const lastPrint = new Map<string, string>();
   for (const r of runs.data) if (r.project_id && !lastPrint.has(r.project_id)) lastPrint.set(r.project_id, r.fingerprint);
-
-  const changed = projects
-    .map((p) => ({ project: p, records: records.filter((r) => r.project_id === p.id) }))
+  return ps
+    .map((p) => ({ project: p, records: rs.filter((r) => r.project_id === p.id) }))
     .map((x) => ({ ...x, print: fingerprint(x.records) }))
     .filter((x) => x.records.length && lastPrint.get(x.project.id) !== x.print);
+}
+
+/** 연결 그래프에서 "N개 프로젝트 정리 중" 안내에 쓴다. 이미 읽어 둔 프로젝트·기록을 넘기면 다시 읽지 않는다 */
+export async function keywordBacklog(db: Db, projects?: Awaited<ReturnType<typeof listProjects>>, records?: RecordView[]): Promise<number> {
+  if (!keywordsOn()) return 0;
+  return (await pendingProjects(db, projects, records).catch(() => [])).length;
+}
+
+export async function refreshKeywords(db: Db): Promise<{ processed: number; skipped: number }> {
+  if (!keywordsOn()) return { processed: 0, skipped: 0 };
+  const changed = await pendingProjects(db);
 
   const deps = await keywordDeps(db);
   for (const x of changed.slice(0, MAX_PROJECTS_PER_RUN)) {
@@ -115,7 +126,15 @@ async function refreshProject(
 }
 
 /** 기록이 바뀐 뒤 부르는 것: 키워드 갱신 → 연결선 재계산. 키워드가 실패해도 연결선은 다시 계산한다 */
-export async function afterRecordsChanged(db: Db) {
-  await refreshKeywords(db).catch((e) => console.error("키워드 갱신 실패:", e));
-  await recomputeGraph(db).catch((e) => console.error("연결선 재계산 실패:", e));
+export async function afterRecordsChanged(db: Db, userId?: string) {
+  // 같은 학생의 정리가 이 서버에서 이미 돌고 있으면 건너뛴다 (AI 를 같은 프로젝트에 두 번 부르지 않게)
+  if (userId && running.has(userId)) return;
+  if (userId) running.add(userId);
+  try {
+    await refreshKeywords(db).catch((e) => console.error("키워드 갱신 실패:", e));
+    await recomputeGraph(db).catch((e) => console.error("연결선 재계산 실패:", e));
+  } finally {
+    if (userId) running.delete(userId);
+  }
 }
+const running = new Set<string>();

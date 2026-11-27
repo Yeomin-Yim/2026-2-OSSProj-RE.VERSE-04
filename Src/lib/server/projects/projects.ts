@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { groupByCode, mergeTags, type Cited, type ProjectTags, type Sentence, type Source, type Tag } from "@/lib/core/index.ts";
+import { groupByCode, mergeTags, regardTags, type Cited, type ProjectTags, type Sentence, type Source, type Tag } from "@/lib/core/index.ts";
 import type { Db } from "../auth";
 
 export interface ProjectRow {
@@ -133,7 +133,8 @@ export function toProjectTags(records: RecordView[]): ProjectTags[] {
   for (const r of records) {
     byProject.set(r.project_id, [...(byProject.get(r.project_id) ?? []), ...r.tags]);
   }
-  return [...byProject].map(([id, tags]) => ({ id, tags: groupByCode(tags) }));
+  // 저장된 축 태그에 지금의 바로잡기 규칙을 적용해서 쓴다 (lib/core/keywords/resolve.ts regardTags)
+  return [...byProject].map(([id, tags]) => ({ id, tags: groupByCode(regardTags(tags)) }));
 }
 
 // ───────── 개요 ─────────

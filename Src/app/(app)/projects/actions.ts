@@ -19,13 +19,13 @@ async function run(
   work: (db: Db) => Promise<Omit<ActionResult, "ok">>,
   options: { regraph?: boolean } = {},
 ): Promise<ActionResult> {
-  const { supabase } = await requireUser();
+  const { supabase, userId } = await requireUser();
   try {
     const result = await work(supabase);
     revalidatePath("/projects", "layout");
     // 키워드 갱신·연결선 재계산은 응답을 보낸 뒤에 한다 (저장이 기다리지 않도록)
     if (options.regraph) {
-      after(() => afterRecordsChanged(supabase));
+      after(() => afterRecordsChanged(supabase, userId));
     }
     return { ok: true, ...result };
   } catch (e) {

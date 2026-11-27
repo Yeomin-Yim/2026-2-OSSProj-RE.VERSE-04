@@ -8,7 +8,7 @@ export type Vec = number[];
 export type KeywordCategory = "topic" | "activity" | "tech" | "output";
 
 /** 시험값. 바꾸면 PIPELINE_VERSION 도 올린다 (keyword_runs.params 에 함께 남는다) */
-export const PIPELINE_VERSION = "kw-0.2";
+export const PIPELINE_VERSION = "kw-0.4"; // 0.4: 숫자+세는 말 떼기 (D19)
 export const PARAMS = {
   /** 프로젝트 전체와의 관련도가 이보다 낮은 후보는 버린다 */
   minRelevance: 0.2,
@@ -51,13 +51,16 @@ export function pickCandidates(
   doc: Vec,
   k: number,
   p: { minRelevance: number; mmrLambda: number } = PARAMS,
+  /** 관련도·MMR 과 상관없이 먼저 고르는 후보 (프로젝트 제목에 있는 말) */
+  must: Set<string> = new Set(),
 ): Scored[] {
   const pool: Scored[] = cands
     .filter((c) => vectors.has(c.surface))
     .map((c) => ({ ...c, vector: vectors.get(c.surface)!, relevance: cosine(vectors.get(c.surface)!, doc) }))
-    .filter((c) => c.relevance >= p.minRelevance);
+    .filter((c) => c.relevance >= p.minRelevance || must.has(c.surface));
 
   const picked: Scored[] = [];
+  for (let i = pool.length - 1; i >= 0; i--) if (must.has(pool[i].surface) && picked.length < k) picked.push(pool.splice(i, 1)[0]);
   while (picked.length < k && pool.length) {
     let bestI = 0, best = -Infinity;
     for (let i = 0; i < pool.length; i++) {

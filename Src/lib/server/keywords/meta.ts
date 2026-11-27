@@ -3,6 +3,7 @@
 import { cache } from "react";
 import {
   axisOf,
+  AXIS_OVERRIDES,
   CATEGORY_GROUP,
   EXTRA_AXES,
   isAxisCode,
@@ -27,7 +28,7 @@ const extra = new Map(EXTRA_AXES.map((a) => [a.code, a]));
 export function tagLabel(code: string, dict: RuleDict): string {
   if (isKeywordCode(code)) return keywordLabel(code);
   const c = axisOf(code);
-  return dict.tags[c]?.label ?? extra.get(c)?.label ?? c;
+  return AXIS_OVERRIDES[c]?.label ?? dict.tags[c]?.label ?? extra.get(c)?.label ?? c;
 }
 
 export function tagGroup(code: string, dict: RuleDict, cats: Map<string, KeywordCategory>): TagGroup | undefined {

@@ -40,14 +40,14 @@ export async function getImport(id: string) {
 
 /** ③ 학생이 고친 초안을 저장한다. 미분류로 남긴 노트는 '일반 활동'으로 간다. */
 export async function confirmImport(id: string, draft: Draft) {
-  const { supabase } = await requireUser();
+  const { supabase, userId } = await requireUser();
   const result = await attempt(async () => {
     const c = await gcam.confirmImport(supabase, id, draft);
     return { ...c, message: `노트 ${c.created}개를 만들고 ${c.updated}개를 갱신했어요` + (c.kept ? ` · 직접 고친 노트 ${c.kept}개는 그대로 두었어요` : "") };
   });
   if (result.ok) {
     revalidatePath("/projects", "layout");
-    after(() => afterRecordsChanged(supabase));
+    after(() => afterRecordsChanged(supabase, userId));
   }
   return result;
 }

@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ScrapButton, TodoList, useStudent } from "@/components/student/StudentData";
 import type { GraphProject } from "@/components/graph/GraphView";
 import type { ExNode, ExploreData } from "@/lib/server/explore/explore";
+import { LENS_LABEL, type LensKey } from "@/lib/core/recommend/lenses";
 import type { GraphNote } from "@/lib/server/student/notes";
 import type { ScrapInput, ScrapLoc } from "@/lib/server/student/scraps";
 import { CHECKLIST, INFO_LEAVES } from "./info";
@@ -53,7 +54,20 @@ const STATUS_TEXT: Record<string, (kind: string) => string> = {
 const snap = (v: number) => Math.max(240, Math.round(v / 40) * 40);
 const short = (s: string, n = 14) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
-export function ExploreGraph({ data, projects, notes: initialNotes, place, open }: Props) {
+const LENS_HINT: Record<LensKey, string> = {
+  overall: "넓이와 깊이를 함께 본 점수",
+  repeated: "여러 프로젝트에서 되풀이해 온 활동 기준",
+  deep: "한 프로젝트를 깊게 한 경험 기준",
+  interest: "내가 다뤄 온 주제 기준 (개인주제 프로젝트 우선)",
+};
+
+export function ExploreGraph({ data: raw, projects, notes: initialNotes, place, open }: Props) {
+  // 추천 관점: 고른 관점의 추천으로 각 쪽의 children 을 바꿔 끼운다 (나머지 그래프 로직은 그대로)
+  const [lens, setLens] = useState<LensKey>("overall");
+  const data = useMemo<ExploreData>(() => {
+    const pick = (s: ExploreData["college"]) => (s.lenses?.[lens] ? { ...s, children: s.lenses[lens]! } : s);
+    return { ...raw, college: pick(raw.college), career: pick(raw.career) };
+  }, [raw, lens]);
   const router = useRouter();
   const toast = useToast();
   const { isScrapped } = useStudent();
@@ -413,6 +427,19 @@ export function ExploreGraph({ data, projects, notes: initialNotes, place, open 
                 </span>
               ))}
             </div>
+            {mode && data[mode].lenses && (
+              <div className="lens-tabs" role="tablist" aria-label="추천 관점">
+                {(Object.keys(LENS_LABEL) as LensKey[]).map((k) => (
+                  <button key={k} role="tab" aria-selected={lens === k}
+                    title={data[mode].lenses?.[k]?.length ? LENS_HINT[k] : k === "deep" ? "지금 기록으로는 종합과 같은 결과예요. 한 프로젝트를 더 깊게 기록하면 달라져요." : "이 관점으로 겹치는 학과·직무가 아직 없어요."}
+                    className={"tool-btn" + (lens === k ? " active" : "")}
+                    disabled={!data[mode].lenses?.[k]?.length}
+                    onClick={() => { setLens(k); setPath([]); setSel(null); setPostings(null); setMoved({}); }}>
+                    {LENS_LABEL[k]}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="toolbar-actions">
               {mode && <button className="tool-btn add" onClick={() => setAdding(defaultPids())}>+ 노트 추가</button>}
               {mode && <button className="tool-btn" disabled={revealing || loading} onClick={() => generate(900)} title="생성 모션 다시 보기">↻ 다시 보기</button>}
@@ -581,16 +608,20 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
     const o = node.posting;
     return (
       <>
-        <div className="panel-label">채용공고 (예시)</div>
+        <div className="panel-label">{demo ? "채용공고 (예시)" : "채용공고 · 사람인"}</div>
         <h2>{o.company}</h2>
         <p className="desc">{o.title} · {o.location} · 마감 {o.deadline}</p>
         <Notice type="job" />
-        <div className="panel-scrap"><button className="scrap-btn" disabled title="시연 모드에서는 스크랩할 수 없어요"><Icon name="star" /></button><span>시연 모드에서는 스크랩을 저장하지 않아요</span></div>
-        <h3 className="section-title">한 줄 요약</h3>
+        {demo && <div className="panel-scrap"><button className="scrap-btn" disabled title="시연 모드에서는 스크랩할 수 없어요"><Icon name="star" /></button><span>시연 모드에서는 스크랩을 저장하지 않아요</span></div>}
+        <h3 className="section-title">{demo ? "한 줄 요약" : "공고 정보"}</h3>
         <p className="desc">{o.summary}</p>
-        <div className="panel-btns"><button className="btn sm primary" onClick={() => onPostings(node.parentId!, node.id)}>목록에서 자세히 보기</button></div>
+        {!demo && o.requirements.length > 0 && <p className="desc">자격: {o.requirements.join(" · ")}</p>}
+        <div className="panel-btns">
+          {!demo && node.url && <a className="btn sm primary" href={node.url} target="_blank" rel="noreferrer">사람인에서 원문 보기</a>}
+          <button className={"btn sm" + (demo ? " primary" : "")} onClick={() => onPostings(node.parentId!, node.id)}>목록에서 보기</button>
+        </div>
         <TodoList todoKey={"posting:" + node.id} defaults={CHECKLIST.posting} />
-        <Notice type="mock" />
+        {demo && <Notice type="mock" />}
       </>
     );
   }
@@ -603,7 +634,7 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
   const pids = node.kind === "info" || node.kind === "posting" ? [] : node.evidence;
   const scrap = scrapInput(node);
   const scrapped = scrap ? !!scrapOf(scrap.type, scrap.ref_id) : false;
-  const kindLabel = { root: "탐색 시작", recommend: isMajor ? "추천 학과" : "추천 직무", target: demo ? "추천 대학" : "개설 대학", info: "준비 정보", posting: "채용공고 (예시)" }[node.kind];
+  const kindLabel = { root: "탐색 시작", recommend: isMajor ? "추천 학과" : "추천 직무", target: demo ? "추천 대학" : "개설 대학", info: "준비 정보", posting: demo ? "채용공고 (예시)" : "채용공고" }[node.kind];
   const nextTitle = node.kind === "root" ? (mode === "college" ? "추천 학과" : "추천 직무") : isMajor ? (demo ? "추천 대학" : "개설 대학") : isJob ? (demo ? "채용공고 (예시)" : "채용공고") : "다음 선택";
   return (
     <>
@@ -740,12 +771,12 @@ function Postings({ data, jobId, hi, onClose }: { data: ExploreData; jobId: stri
     <section id="exPostings" className="postings" aria-label="채용공고 목록">
       <div className="ph">
         <span className="nd-kind proj"><i />채용공고</span>
-        <h3>{job.label} <small>{data.demo ? `${list.length}건 · 예시` : "준비 중"}</small></h3>
+        <h3>{job.label} <small>{data.demo ? `${list.length}건 · 예시` : list.length ? `${list.length}건 · 사람인 최신순` : "준비 중"}</small></h3>
         <button className="icon-btn" onClick={onClose} aria-label="닫기"><Icon name="x" /></button>
       </div>
-      {data.demo ? (
+      {data.demo || list.length ? (
         <>
-          <Notice type="mock" extra="실제 공고는 원문을 직접 확인하세요." />
+          {data.demo && <Notice type="mock" extra="실제 공고는 원문을 직접 확인하세요." />}
           <Notice type="job" />
           {list.map((n) => n.posting && (
             <details key={n.id} className={"posting" + (n.id === hi ? " on" : "")} open={n.id === hi}>
@@ -754,13 +785,13 @@ function Postings({ data, jobId, hi, onClose }: { data: ExploreData; jobId: stri
                 <span className="mt">{n.posting.location} · 마감 {n.posting.deadline}</span>
               </summary>
               <div className="pb">
-                <h5>요약</h5><p>{n.posting.summary}</p>
-                <h5>자격 요건</h5><ul>{n.posting.requirements.map((r) => <li key={r}>{r}</li>)}</ul>
+                <h5>{data.demo ? "요약" : "공고 정보"}</h5><p>{n.posting.summary}</p>
+                {n.posting.requirements.length > 0 && <><h5>자격 요건</h5><ul>{n.posting.requirements.map((r) => <li key={r}>{r}</li>)}</ul></>}
                 {n.posting.preferred.length > 0 && <><h5>우대 사항</h5><ul>{n.posting.preferred.map((r) => <li key={r}>{r}</li>)}</ul></>}
-                <h5>내 메모 <span className="hint">· 시연 모드에서는 저장하지 않아요</span></h5>
-                <textarea className="memo" disabled placeholder="실제 채용공고가 연결되면 메모를 남길 수 있어요." />
+                {data.demo && <><h5>내 메모 <span className="hint">· 시연 모드에서는 저장하지 않아요</span></h5>
+                <textarea className="memo" disabled placeholder="실제 채용공고가 연결되면 메모를 남길 수 있어요." /></>}
                 <TodoList todoKey={"posting:" + n.id} defaults={CHECKLIST.posting} />
-                <div className="pf2"><span>· 예시 데이터라 원문 링크가 없어요</span></div>
+                <div className="pf2">{data.demo ? <span>· 예시 데이터라 원문 링크가 없어요</span> : n.url && <a href={n.url} target="_blank" rel="noreferrer">사람인에서 원문 보기 →</a>}</div>
               </div>
             </details>
           ))}

@@ -91,7 +91,25 @@ export interface PipelineResult {
   usage: Usage | null;
 }
 
-const DOC_CHARS = 8000;
+/** 프로젝트 전체를 대표하는 글의 길이. 한국어는 글자당 토큰이 1개를 넘어서, 임베딩 한도(8,192토큰)를 넉넉히 밑돌게 잡는다 */
+const DOC_CHARS = 4000;
+
+/** 긴 프로젝트는 앞부분만이 아니라 처음부터 끝까지 고르게 문장을 골라 DOC_CHARS 안에 담는다 */
+export function docText(title: string, topic: string | null | undefined, sentences: { text: string }[], max = DOC_CHARS): string {
+  const headText = [title, topic ?? ""].filter(Boolean).join("\n");
+  const all = sentences.map((s) => s.text);
+  const total = all.reduce((n, t) => n + t.length + 1, 0);
+  if (headText.length + total <= max) return [headText, ...all].join("\n");
+  const step = total / (max - headText.length);
+  const picked: string[] = [];
+  let budget = max - headText.length;
+  for (let i = 0; i < all.length && budget > 0; i += Math.max(1, Math.round(step))) {
+    if (all[i].length + 1 > budget) continue;
+    picked.push(all[i]);
+    budget -= all[i].length + 1;
+  }
+  return [headText, ...picked].join("\n");
+}
 /** 사전 키워드에 축이 없을 때 임베딩만으로 붙이는 최소 유사도 (저장하지 않고 그때그때 계산) */
 export const AXIS_FALLBACK = 0.45;
 const MIN_SENTENCE = 4;
@@ -113,19 +131,24 @@ export async function runKeywordPipeline(input: PipelineInput, deps: Deps): Prom
   if (!sentences.length) return { keywords: [], tags: [], stats: empty, problems, usage: null };
 
   // ② 후보 추출 + 임베딩 (이미 본 표현은 저장해 둔 임베딩을 쓴다)
-  const cands = extractCandidates(sentences);
+  // 제목의 말이 본문에 한 번이라도 나오면 후보로 꼭 남긴다 (학생이 직접 붙인 주제. 판단기록 D19: "제2형 염증성질환 영상" 이 본문에 한 번만 나와 빠졌다)
+  const top = extractCandidates(sentences);
+  const titleWords = new Set(extractCandidates([{ sid: "title", text: input.title }]).map((c) => c.surface));
+  const fromTitle = input.mode === "student" ? extractCandidates(sentences, 10_000).filter((c) => titleWords.has(c.surface)) : [];
+  const cands = [...top, ...fromTitle.filter((c) => !top.some((t) => t.surface === c.surface))];
+  const must = new Set(fromTitle.map((c) => c.surface));
   const aliases = await deps.store.loadAliases(cands.map((c) => c.surface));
   const vectors = new Map<string, Vec>();
   for (const [s, a] of aliases) if (a.vector) vectors.set(s, a.vector);
   const missing = cands.filter((c) => !vectors.has(c.surface)).map((c) => c.surface);
 
-  const docText = [input.title, input.topic ?? "", ...sentences.map((s) => s.text)].filter(Boolean).join("\n").slice(0, DOC_CHARS);
-  const { vectors: embedded, tokens } = await deps.embed([docText, ...missing]);
+  const doc0 = docText(input.title, input.topic, sentences);
+  const { vectors: embedded, tokens } = await deps.embed([doc0, ...missing]);
   const doc = embedded[0];
   missing.forEach((s, i) => vectors.set(s, embedded[i + 1]));
   if (missing.length) await deps.store.saveEmbeddings(missing.map((s, i) => ({ surface: s, vector: embedded[i + 1] })));
 
-  const picked = pickCandidates(cands, vectors, doc, input.mode === "profile" ? PARAMS.keepProfile : PARAMS.keepStudent);
+  const picked = pickCandidates(cands, vectors, doc, input.mode === "profile" ? PARAMS.keepProfile : PARAMS.keepStudent, PARAMS, must);
 
   // ③ 거름망
   const dict = await deps.store.loadDictionary();

@@ -39,10 +39,29 @@ select created_at, (stats->>'ai_sent')::int as ai, (stats->>'candidates')::int a
 from keyword_runs order by created_at;
 ```
 
-## 추천에서 쓰는 방법
-- 점수표 = 커리어넷 원문을 같은 파이프라인에 통과시킨 키워드. 무게 = AI 중요도(high 3 / medium 2 / low 1)
-- 학생 키워드가 점수표 키워드와 **이름이 같거나**, 임베딩 유사도 **0.8 이상**이면 그 칸을 채운 것으로 본다 (`core/keywords/related.ts`)
-- 점수 공식(넓이·깊이)은 그대로
+## 추천에서 쓰는 방법 (2층: 키워드 → 공통 축)
+- **1층 키워드** (`K:…`): 학생·점수표에서 자유롭게 나온 말. 프로젝트 사이 연결에 쓴다.
+- **2층 공통 축** (`A:…`): 규칙 사전 v0.5의 66개 코드와 보충 축 D19 정보보안 · D20 네트워크·통신 · D21 수학·이론 · D22 건강·의료.
+  - AI 가 키워드를 판정할 때 같은 호출 안에서 함께 고른다. 후보는 임베딩 상위 5개, 규칙 사전 힌트(★), 축 설명(legend)이다.
+  - 고른 축은 `keywords.axes` 에 고정되어 다음부터는 AI 를 다시 부르지 않는다.
+  - 학생과 학과·직무는 이 축으로 만난다.
+  - 자유 키워드끼리 바로 맞추는 방식은 어휘가 달라 거의 안 겹쳤다 (판단기록 D7).
+- **축 바로잡기** `guardAxes`: AI 가 되풀이하는 실수를 읽을 때 코드로 고친다. 체육 → 스포츠·여가, 메이크업 → 문화·예술, 의약품 안전 → 건강·의료.
+- **점수표** = 커리어넷 원문을 같은 파이프라인에 통과시킨 결과다. 축마다 무게 = 그 축에 붙은 키워드의 최고 중요도 (high 3 / medium 2 / low 1).
+- **점수 공식**: 0.5·넓이 + 0.5·깊이.
+  - 분모 하한 `MIN_TOTAL=6`: 칸 하나짜리 점수표가 100점이 되지 않게 한다.
+  - 축 변별력 `axisIdf`: 많은 점수표에 흔한 축은 가볍게 센다.
+  - 교과 수업 묶음(국어·수학 …)은 추천 계산에서 뺀다 (`isSubjectProject`).
+- **추천 관점 4가지** (`core/recommend/lenses.ts`, 화면의 탭)
+
+  | 관점 | 계산 |
+  |---|---|
+  | 종합 | 위 점수. 주제가 하나도 안 겹치면 ×0.7 (`topicFit`, D21 칸은 판단에서 제외) |
+  | 많이 해 온 것 | 활동·결과물·도구 축(M·O·T)만, 되풀이한 횟수(최대 3)만큼. 거캠 학생 대부분이 하는 활동은 칸 무게를 (1−비율) 배로 (`COMMON_AXIS_SHARE`, 19명 평가값) |
+  | 깊게 해 본 것 | 깊이 순 (+ 주제 감점) |
+  | 관심 있을 만한 것 | 주제 축(D)만. 스스로 고른 개인주제 프로젝트(제목에 개주프·개인주제·개인성장) 기준. 점수 = 덮음과 채움의 조화평균 (`interestScores`) |
+
+- 결정 근거와 평가 수치는 `zz_local/키워드_판단기록.md` (D0~D17).
 
 ## 시험값 (정답 세트로 조정할 것)
 
@@ -59,14 +78,18 @@ from keyword_runs order by created_at;
 
 ## 실행
 
-1. `supabase/migrations/0008_keywords.sql` 을 SQL Editor 에서 실행
-2. 사전 씨앗 + 점수표 (Src 폴더에서, 처음 한 번)
+1. `supabase/migrations/0008_keywords.sql`, `0009_keyword_axes.sql`, `0010_keyword_grants.sql` 을 SQL Editor 에서 차례로 실행한다.
+2. 점수표 (Src 폴더에서). 커리어넷 원문 JSON 또는 검토 엑셀 CSV 를 쓴다.
    ```
-   node --env-file=.env.local --experimental-strip-types scripts/build_keyword_profiles.ts profiles.csv --dry-run --only 569,591,834
-   node --env-file=.env.local --experimental-strip-types scripts/build_keyword_profiles.ts profiles.csv
+   node --env-file=.env.local --experimental-strip-types scripts/build_keyword_profiles.ts profiles.json --version kw-2026-11-27 --limit 20
    ```
-   `--dry-run` 도 키워드 사전은 채운다 (점수표만 저장 안 함).
-3. 학생 기록은 저장할 때마다 자동. 이미 있는 기록은 아무 기록이나 한 번 저장하면 프로젝트 4개씩 계산된다.
+   - 같은 버전으로 이미 저장된 code 는 건너뛰므로, 여러 번 실행하면 이어서 진행된다.
+   - `--force --only 23,169` 는 특정 code 만 다시 만든다. code 가 학과·직무 사이에서 겹치면 둘 다 다시 만든다.
+   - `--dry-run` 은 점수표를 저장하지 않지만, 키워드 사전은 이때도 채운다.
+3. 개설 대학: `node --env-file=.env.local --experimental-strip-types scripts/fetch_universities.ts`
+   - 커리어넷 학과 정보의 개설 대학 목록이다. 화면에는 학과당 8곳만 보인다 (동국대 → 서울 → 이름순).
+4. 학생 기록은 저장할 때마다 자동으로 처리된다. 이미 있는 기록은 아무 기록이나 한 번 저장하면 프로젝트 4개씩 계산된다.
+5. 채용공고: `SARAMIN_ACCESS_KEY` 가 있으면 추천 직무마다 사람인 최신 공고 5건을 붙인다 (`lib/server/explore/postings.ts`).
 
 ## 환경변수
 

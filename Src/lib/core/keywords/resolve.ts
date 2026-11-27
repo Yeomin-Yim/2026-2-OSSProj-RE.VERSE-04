@@ -3,7 +3,7 @@
 
 import type { Tag } from "../types.ts";
 import type { DictKeyword, KeywordCategory, Scored, Verdict } from "./select.ts";
-import { axisCode, cleanAxes } from "./axes.ts";
+import { axisCode, axisOf, cleanAxes, guardAxes, isAxisCode } from "./axes.ts";
 
 export const KEYWORD_PREFIX = "K:";
 export const CATEGORIES: KeywordCategory[] = ["topic", "activity", "tech", "output"];
@@ -190,15 +190,28 @@ export function toKeywordTags(keywords: FinalKeyword[]): Tag[] {
     const matched = k.surfaces[0]?.display ?? k.canonical;
     for (const sid of k.sids) {
       tags.push({ code: keywordCode(k.canonical), sid, matched });
-      for (const a of k.axes) tags.push({ code: axisCode(a), sid, matched: k.canonical });
+      for (const a of guardAxes(k.canonical, k.axes)) tags.push({ code: axisCode(a), sid, matched: k.canonical });
     }
   }
   return tags;
 }
 
 /** 학과·직무 점수표 무게: 축마다 그 축에 붙은 키워드 중 가장 높은 중요도 (high 3 / medium 2 / low 1) */
-export function axisWeights(keywords: Pick<FinalKeyword, "axes" | "importance">[]): Record<string, number> {
+export function axisWeights(keywords: (Pick<FinalKeyword, "axes" | "importance"> & { canonical?: string })[]): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const k of keywords) for (const a of k.axes) out[a] = Math.max(out[a] ?? 0, IMPORTANCE_WEIGHT[k.importance]);
+  for (const k of keywords) for (const a of k.canonical ? guardAxes(k.canonical, k.axes) : k.axes) out[a] = Math.max(out[a] ?? 0, IMPORTANCE_WEIGHT[k.importance]);
+  return out;
+}
+
+/**
+ * 이미 저장된 축 태그에도 지금의 바로잡기 규칙을 적용한다 (읽을 때).
+ * 축 태그(A:…)의 matched 는 키워드 이름이므로, guardAxes 로 그 축을 바꾸거나 뺀다. 규칙이 늘어도 기록을 다시 정리하지 않아도 된다.
+ */
+export function regardTags(tags: Tag[]): Tag[] {
+  const out: Tag[] = [];
+  for (const t of tags) {
+    if (!isAxisCode(t.code)) { out.push(t); continue; }
+    for (const a of guardAxes(t.matched, [axisOf(t.code)])) out.push({ ...t, code: axisCode(a) });
+  }
   return out;
 }

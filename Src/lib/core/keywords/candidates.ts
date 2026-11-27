@@ -128,7 +128,15 @@ const MODIFIER = /..적$/u;
  * 문장들에서 후보를 뽑는다: 명사 하나(unigram) + 붙어 나온 명사 두 개(bigram, 예: "데이터 분석").
  * 불용어로 시작하거나 끝나는 명사구는 만들지 않는다. 많이 나온 순서로 최대 MAX_CANDIDATES 개.
  */
-export function extractCandidates(sentences: Pick<Sentence, "sid" | "text">[], max = MAX_CANDIDATES): Candidate[] {
+/**
+ * 숫자 + 세는 말 뒤에 붙어 쓴 말을 떼어 둔다: "제2형염증성질환을" → "제2형 염증성질환을" (판단기록 D19)
+ * 숫자에서 토큰이 끊겨 "형염증성질환" 이 후보가 되던 문제
+ */
+const COUNTER_GLUE = /(\d)(형|회|차|학년|기|단계|번째|개|명|월|일|주|시간|분|년|학기|조)(?=[가-힣]{2})/gu;
+export const splitCounters = (text: string) => text.normalize("NFC").replace(COUNTER_GLUE, "$1$2 ");
+
+export function extractCandidates(input: Pick<Sentence, "sid" | "text">[], max = MAX_CANDIDATES): Candidate[] {
+  const sentences = input.map((s) => ({ sid: s.sid, text: splitCounters(s.text) }));
   // 조사 없이 단독으로 나온 말 (애매한 조사를 뗄지 판단하는 데 쓴다)
   const bare = new Set<string>();
   for (const s of sentences) for (const m of s.text.normalize("NFC").matchAll(TOKEN)) bare.add(m[0]);

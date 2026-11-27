@@ -397,3 +397,123 @@ test("축 후보: 사전 예시 힌트를 앞에 두고 임베딩 상위로 채�
   ];
   assert.deepEqual(axisCandidates(unit(1, 0), axes, ["D03", "X99"], 2), ["D03", "D09", "M03"]);
 });
+
+test("축 변별력·교과 묶음·건강 축 분리", async () => {
+  const { axisIdf, isSubjectProject, buildAxes } = await import("../../lib/core/index.ts");
+  const idf = axisIdf([{ weights: { M17: 3, D18: 2 } }, { weights: { M17: 3 } }, { weights: { M17: 2, D03: 1 } }]);
+  assert.ok(idf("D18") > idf("M17")); // 드문 축이 더 무겁다
+  assert.ok(isSubjectProject("국어") && isSubjectProject("주제중심") && isSubjectProject("수학 수업"));
+  assert.ok(!isSubjectProject("비건 식생활 이해 문제탐색 프로젝트"));
+  const axes = buildAxes({ version: "t", exclude_default: [], exclude_applies_to: [], tags: { D05: { label: "건강·안전", group: "topic", patterns: ["건강", "안전"] } } });
+  assert.equal(axes.find((a) => a.code === "D05")!.label, "안전·위험");
+  assert.ok(axes.some((a) => a.code === "D22" && a.label === "건강·의료"));
+});
+
+test("프로젝트 대표 글: 길면 처음부터 끝까지 고르게 골라 한도 안에 담는다", async () => {
+  const { docText } = await import("../../lib/server/keywords/pipeline.ts");
+  const sentences = Array.from({ length: 400 }, (_, i) => ({ text: `${i}번째 문장입니다 내용내용내용내용` }));
+  const t = docText("제목", "주제", sentences, 2000);
+  assert.ok(t.length <= 2000);
+  const idx = t.split("\n").slice(2).map((l) => Number(l.split("번째")[0]));
+  assert.equal(idx[0], 0); // 앞
+  assert.ok(idx.some((i) => i > 180 && i < 220)); // 중간
+  assert.ok(idx.at(-1)! >= 350); // 끝
+  assert.equal(docText("제목", null, [{ text: "짧다" }]), "제목\n짧다");
+});
+
+test("관심: 내 관심을 덮는 정도와 학과 주제를 채운 정도를 함께 (칸 하나짜리 학과가 100점이 되지 않게)", async () => {
+  const { interestScores, rarityAmongStudents } = await import("../../lib/core/index.ts");
+  const mine = new Map([["D17", 2], ["D07", 1], ["D18", 1]]);
+  const r = interestScores(mine, [
+    { id: "nurse", weights: { D18: 3 } },              // 내 관심 중 일부만
+    { id: "food", weights: { D17: 3, D22: 2 } },       // 가장 많이 다룬 주제
+    { id: "none", weights: { D10: 3 } },
+  ]);
+  assert.deepEqual(r.map((x) => x.profile_id), ["food", "nurse"]);
+  assert.ok(r.find((x) => x.profile_id === "nurse")!.score < 100);
+  const rare = rarityAmongStudents({ M22: 0.9, O06: 0.1 });
+  assert.ok(rare("M22") < rare("O06") && rare("X") === 1);
+});
+
+test("축 바로잡기: 체육은 스포츠·여가, 메이크업은 문화·예술, 건강 말이 있으면 그대로", async () => {
+  const { guardAxes } = await import("../../lib/core/index.ts");
+  assert.deepEqual(guardAxes("체육 대회", ["D22", "D18"]), ["D18"]);
+  assert.deepEqual(guardAxes("메이크업", ["D22"]), ["D07"]);
+  assert.deepEqual(guardAxes("운동 건강", ["D22"]), ["D22"]);
+  assert.deepEqual(guardAxes("약학 탐구일지", ["D22"]), ["D22"]);
+});
+
+test("추천 관점 4가지: 관심은 개인주제 기준, 많이 해 온 것은 흔한 활동을 덜 센다", async () => {
+  const { lensScores } = await import("../../lib/core/index.ts");
+  const tags = (...c: string[]) => new Map(c.map((x) => [x, ["s1"]]));
+  const projects = [
+    { id: "team", tags: tags("M23", "M22", "D10") },
+    { id: "own", tags: tags("M23", "O06", "D17") },
+    { id: "own2", tags: tags("O06", "D17") },
+  ];
+  const profiles = [
+    { id: "food", weights: { D17: 3, O06: 1 } },
+    { id: "pitch", weights: { M23: 3, M22: 3 } },
+    { id: "edit", weights: { O06: 3, M23: 1 } },
+    { id: "city", weights: { D10: 3 } },
+  ] as { id: string; weights: Record<string, number> }[];
+  const r = lensScores(projects, profiles, { selfChosen: new Set(["own", "own2"]) });
+  assert.equal(r.interest[0].profile_id, "food");
+  assert.ok(!r.interest.some((x: { profile_id: string }) => x.profile_id === "city"));
+  assert.equal(r.repeated[0].profile_id, "edit");
+  assert.equal(r.overall.length > 0 && r.deep.length > 0, true);
+});
+
+test("종합: 주제가 하나도 안 겹치면 낮춘다 (수학·이론 칸은 판단에서 뺀다)", async () => {
+  const { topicFit, scoreProfiles } = await import("../../lib/core/index.ts");
+  const tags = (...c: string[]) => new Map(c.map((x) => [x, ["s1"]]));
+  const projects = [{ id: "p", tags: tags("M22", "M06", "D17") }];
+  const r = topicFit(scoreProfiles(projects, [
+    { id: "nurse", weights: { M22: 3, D22: 3 } },   // 활동만 겹침 → 감점
+    { id: "stats", weights: { M06: 3, D21: 3 } },   // 주제 칸이 수학·이론뿐 → 감점 없음
+    { id: "food", weights: { D17: 3, M22: 1 } },
+  ]));
+  const nurse = r.find((x) => x.profile_id === "nurse")!;
+  assert.equal((nurse as { offTopic?: boolean }).offTopic, true);
+  assert.ok(!(r.find((x) => x.profile_id === "stats") as { offTopic?: boolean }).offTopic);
+});
+
+test("축 바로잡기: 의약품 안전은 건강·의료, 야간 귀가 안전은 그대로", async () => {
+  const { guardAxes } = await import("../../lib/core/index.ts");
+  assert.deepEqual(guardAxes("의약품 안전", ["D05"]), ["D22"]);
+  assert.deepEqual(guardAxes("야간 귀가 안전", ["D05", "D02"]), ["D05", "D02"]);
+});
+
+test("축 바로잡기: 그냥 '프로토타입 제작'은 실물 시제품, 앱 프로토타입은 소프트웨어, 수업 이름 '체육'은 축 없음", async () => {
+  const { guardAxes } = await import("../../lib/core/index.ts");
+  assert.deepEqual(guardAxes("프로토타입 제작", ["O06", "M17"]), ["O09"]);
+  assert.deepEqual(guardAxes("앱 프로토타입", ["O06", "M17"]), ["O06", "M17"]);
+  assert.deepEqual(guardAxes("체육", ["D18", "D22"]), []);
+  assert.deepEqual(guardAxes("농구", ["D18"]), ["D18"]);
+});
+
+test("저장된 축 태그에도 바로잡기 규칙을 읽을 때 적용한다", async () => {
+  const { regardTags } = await import("../../lib/core/index.ts");
+  const out = regardTags([
+    { code: "A:O06", sid: "s1", matched: "프로토타입 제작" },
+    { code: "A:D18", sid: "s2", matched: "체육" },
+    { code: "K:체육", sid: "s2", matched: "체육" },
+  ]);
+  assert.deepEqual(out.map((t: { code: string }) => t.code), ["A:O09", "K:체육"]);
+});
+
+test("후보: 숫자 + 세는 말에 붙여 쓴 말을 떼어 낸다 (제2형염증성질환 → 염증성질환)", async () => {
+  const { extractCandidates } = await import("../../lib/core/index.ts");
+  const c = extractCandidates([{ sid: "a", text: "내가 전하고 싶은 제2형염증성질환을 사람들에게 알리고 싶었다" }]).map((x: { surface: string }) => x.surface);
+  assert.ok(c.includes("염증성질환"), c.join(","));
+  assert.ok(!c.includes("형염증성질환"));
+});
+
+test("후보 고르기: 제목에 있는 말은 관련도가 낮아도 먼저 고른다", async () => {
+  const { pickCandidates } = await import("../../lib/core/index.ts");
+  const v = (x: number, y: number) => [x, y];
+  const cands = [{ surface: "영상", display: "영상", sids: ["a"], count: 9 }, { surface: "염증성질환", display: "염증성질환", sids: ["b"], count: 1 }];
+  const vectors = new Map([["영상", v(1, 0)], ["염증성질환", v(0.05, 1)]]);
+  const r = pickCandidates(cands, vectors, v(1, 0), 1, { minRelevance: 0.2, mmrLambda: 0.7 }, new Set(["염증성질환"]));
+  assert.deepEqual(r.map((x: { surface: string }) => x.surface), ["염증성질환"]);
+});

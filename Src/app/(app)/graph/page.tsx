@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { after } from "next/server";
+import { afterRecordsChanged, keywordBacklog } from "@/lib/server/keywords/refresh";
 import { buildDemoExplore } from "@/components/explore/demo";
 import { ExploreGraph, type ExplorePlace } from "@/components/explore/ExploreGraph";
 import styles from "@/components/explore/explore.module.css";
@@ -8,7 +10,7 @@ import { requireUser } from "@/lib/server/auth";
 import { loadDictionary } from "@/lib/server/dictionary";
 import { loadExplore } from "@/lib/server/explore/explore";
 import { keywordCategories, tagInfoFor } from "@/lib/server/keywords/meta";
-import { axisOf, isAxisCode } from "@/lib/core/index.ts";
+import { axisOf, isAxisCode, isSubjectProject, regardTags, SELF_CHOSEN } from "@/lib/core/index.ts";
 import { latestRelations } from "@/lib/server/graph";
 import { listProjects, listRecords, toProjectTags } from "@/lib/server/projects";
 import { listGraphNotes } from "@/lib/server/student/notes";
@@ -81,17 +83,24 @@ export default async function GraphPage({ searchParams }: { searchParams: Promis
     listTodos(supabase),
     supabase.from("profiles").select("ui_state").eq("id", userId).maybeSingle(),
   ]);
+  // 기록을 저장할 때 한 번에 4개 프로젝트씩만 정리하므로, 거캠 가져오기처럼 한꺼번에 들어온 경우 여기서 이어서 정리한다
+  const backlog = demo ? 0 : await keywordBacklog(supabase, projects, records);
+  if (backlog) after(() => afterRecordsChanged(supabase, userId));
   // 축 → 그 축을 붙게 한 내 키워드 이름 (추천 근거 표시용)
   const axisSources = new Map<string, string[]>();
-  for (const t of records.flatMap((r) => r.tags)) {
+  for (const t of regardTags(records.flatMap((r) => r.tags))) {
     if (!isAxisCode(t.code)) continue;
     const list = axisSources.get(axisOf(t.code)) ?? [];
     if (!list.includes(t.matched)) list.push(t.matched);
     axisSources.set(axisOf(t.code), list);
   }
+  // 교과 수업 묶음(국어·수학 …)은 추천 계산에서 뺀다. 교과만 있는 학생이면 그대로 쓴다 (판단기록 D12)
+  const mineTags = toProjectTags(records).filter((p) => projects.some((q) => q.id === p.id));
+  const subject = new Set(projects.filter((p) => isSubjectProject(p.title)).map((p) => p.id));
+  const forRec = mineTags.some((p) => !subject.has(p.id)) ? mineTags.filter((p) => !subject.has(p.id)) : mineTags;
   const data = demo
     ? buildDemoExplore(projects)
-    : await loadExplore(supabase, toProjectTags(records).filter((p) => projects.some((q) => q.id === p.id)), dict, axisSources);
+    : await loadExplore(supabase, forRec, dict, axisSources, new Set(projects.filter((p) => SELF_CHOSEN.test(p.title)).map((p) => p.id)));
 
   // 처음 위치: 주소(스크랩에서 이동) > 저장된 마지막 위치 (시연 모드는 항상 처음부터)
   const saved = (profile.data?.ui_state?.career ?? {}) as Partial<ExplorePlace>;
@@ -113,6 +122,11 @@ export default async function GraphPage({ searchParams }: { searchParams: Promis
           <b>시연 모드</b>
           <span>학과·대학·직무·채용공고는 중간 체크인 프로토타입의 <b>예시 데이터</b>예요. 실제 추천이 아니며, 스크랩·체크리스트는 저장하지 않아요. 노트는 실제로 저장돼요.</span>
           <Link className="btn sm" href="/graph">실제 데이터로 돌아가기</Link>
+        </div>
+      )}
+      {backlog > 0 && (
+        <div className="notice notice-ai" role="status">
+          <span>프로젝트 {backlog}개의 기록에서 키워드를 정리하고 있어요. 1~2분 뒤 새로고침하면 추천이 더 정확해져요.</span>
         </div>
       )}
       <StudentProvider initialScraps={scraps} initialTodos={todos} readOnly={demo}>
