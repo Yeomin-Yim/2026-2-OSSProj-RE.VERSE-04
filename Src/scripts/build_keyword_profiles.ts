@@ -73,11 +73,29 @@ function parseCsv(text: string): Record<string, string>[] {
   return body.map((r) => Object.fromEntries(head.map((h, i) => [h.trim(), (r[i] ?? "").trim()])));
 }
 
-const rows = parseCsv(readFileSync(file, "utf8")).filter((r) => r.code && (!only || only.includes(r.code)));
+// 입력: 점수표 검토 엑셀 CSV, 또는 zz_local/keyword-lab/fetch_careernet.ts 가 만든 JSON ([{code, name, kind: 학과|직무, url, text}])
+const raw = readFileSync(file, "utf8");
+const all = file.endsWith(".json")
+  ? (JSON.parse(raw) as { code: string; name: string; kind: string; url: string; text: string; fetched_at?: string }[]).map((p) => ({
+      code: p.code, name: p.name, "구분": p.kind, "원문 링크": p.url, "원문 발췌": p.text, "수집일": p.fetched_at ?? "",
+    }) as Record<string, string>)
+  : parseCsv(raw);
+// 이어서 하기: 같은 버전으로 이미 저장된 code 는 건너뛴다 (--force 면 다시)
+const done = new Set<string>();
+if (!dryRun && !args.includes("--force")) {
+  for (const table of ["major_profiles", "job_profiles"]) {
+    const { data } = await db.from(table).select("code").eq("profile_version", version);
+    for (const d of data ?? []) done.add(`${table}:${d.code}`);
+  }
+}
+const tableOf = (r: Record<string, string>) => (r["구분"] === "직무" ? "job_profiles" : "major_profiles");
+const rows = all.filter((r) => r.code && (!only || only.includes(r.code)) && !done.has(`${tableOf(r)}:${r.code}`));
+const limit = Number(option("--limit") ?? Infinity);
+if (done.size) console.log(`이미 저장된 ${done.size}개는 건너뜀`);
 let aiTokens = 0;
 const summary: string[] = [];
 
-for (const r of rows) {
+for (const r of rows.slice(0, limit)) {
   const kind = r["구분"] === "직무" ? "job" : "major";
   // 원문 발췌의 " || " 는 문단 구분 → 줄바꿈으로 바꿔 문장 나누기
   const text = (r["원문 발췌"] ?? "").replace(/\s*\|\|\s*/g, "\n");
@@ -115,7 +133,7 @@ for (const r of rows) {
         weights,
         source,
         source_url: r["원문 링크"] || null,
-        fetched_at: r["수집일"] || null,
+        fetched_at: r["수집일"] || new Date().toISOString().slice(0, 10),
         rule_version: PIPELINE_VERSION,
         profile_version: version,
       },
@@ -126,4 +144,4 @@ for (const r of rows) {
 }
 
 console.log(summary.join("\n"));
-console.log(`\n${rows.length}개 처리 · AI 토큰 ${aiTokens.toLocaleString()} · ${dryRun ? "저장 안 함(--dry-run)" : `저장: profile_version=${version}`}`);
+console.log(`\n${Math.min(rows.length, limit)}개 처리 (남은 ${Math.max(0, rows.length - limit)}개) · AI 토큰 ${aiTokens.toLocaleString()} · ${dryRun ? "저장 안 함(--dry-run)" : `저장: profile_version=${version}`}`);
