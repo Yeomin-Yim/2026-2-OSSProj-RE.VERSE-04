@@ -40,7 +40,11 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
       records: [...mine].reverse().map((r) => ({ id: r.id, title: r.title, text: r.raw_text })),
       tags: [...count].sort((a, b) => b[1] - a[1]).map(([code]) => tagLabel(code, dict)),
     };
-    return { ...p, checks: checkProject({ start_date: p.start_date, end_date: p.end_date, records: mine }), source };
+    // 증빙 고르기·대표 이미지용 자료 정보 (이미 읽은 기록에서 옮기기만 한다)
+    const files = [...mine].reverse().map((r) => ({
+      id: r.id, title: r.title, kind: r.kind, recorded_at: r.recorded_at, has_file: r.has_file, url: r.url, is_result: r.is_result,
+    }));
+    return { ...p, checks: checkProject({ start_date: p.start_date, end_date: p.end_date, records: mine }), source, files };
   });
 
   const type = one(sp.type);

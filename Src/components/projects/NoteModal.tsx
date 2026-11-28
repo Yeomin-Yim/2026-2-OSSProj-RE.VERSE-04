@@ -5,19 +5,21 @@ import { editRecord, openFile } from "@/app/(app)/projects/actions";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
 import { useAction, useToast } from "@/components/ui/Toast";
-import { kindLabel } from "./format";
-import type { RecordView, TagInfo } from "./types";
+import { kindLabel, ymd } from "./format";
+import type { RecordView } from "./types";
 
 interface Props {
   record: RecordView;
-  tagInfo: TagInfo;
   onClose: () => void;
   /** 있으면 '다른 프로젝트로 옮기기' 버튼을 보여 준다 */
   onMove?: () => void;
 }
 
-/** 자료 내용 보기: 본문 → 문장별 태그. '본문 수정'을 누르면 고칠 수 있다. 파일 자료는 원본을 열 수 있다. */
-export function NoteModal({ record, tagInfo, onClose, onMove }: Props) {
+/**
+ * 자료 내용 보기: 유형·날짜·버전 → 본문. '본문 수정'을 누르면 고칠 수 있다. 파일 자료는 원본을 열 수 있다.
+ * 문장 분리 결과·태그는 DB 에 그대로 두고 화면에서만 보여 주지 않는다 (D007 · 그래프·추천·포트폴리오 근거로 계속 쓰인다).
+ */
+export function NoteModal({ record, onClose, onMove }: Props) {
   const toast = useToast();
   const { pending, run } = useAction();
   const [editing, setEditing] = useState(false);
@@ -26,7 +28,6 @@ export function NoteModal({ record, tagInfo, onClose, onMove }: Props) {
   const [opening, setOpening] = useState(false);
 
   const isPhoto = record.kind === "photo" && record.has_file;
-  const tagsOf = (sid: string) => record.tags.filter((t) => t.sid === sid);
 
   // 사진은 열 때 미리보기 주소(1분 유효)를 받아 온다
   useEffect(() => {
@@ -80,6 +81,12 @@ export function NoteModal({ record, tagInfo, onClose, onMove }: Props) {
 
   return (
     <Modal title={record.title} onClose={onClose}>
+      <div className="nv-meta">
+        <span>{kindLabel(record.kind)}</span><i className="dot" />
+        <span>{ymd(record.recorded_at)}</span><i className="dot" />
+        <span>버전 {record.version}</span>
+        {record.is_result && <span className="tag-result">결과물</span>}
+      </div>
       {isPhoto && (
         <div className="nv-photo">
           {photo?.url ? (
@@ -107,28 +114,6 @@ export function NoteModal({ record, tagInfo, onClose, onMove }: Props) {
         <p className="hint" style={{ marginTop: 8 }}>
           링크: <a href={record.url} target="_blank" rel="noopener noreferrer" className="nv-link">{record.url}</a>
         </p>
-      )}
-
-      {record.sentences.length > 0 && (
-        <>
-          <h4 className="sub-title">문장 · 태그 <span className="hint">버전 {record.version}</span></h4>
-          <ul className="sent-list">
-            {record.sentences.map((s) => (
-              <li key={s.sid}>
-                <span className="sid">{s.sid}</span>
-                <span>
-                  {s.text}
-                  <br />
-                  {tagsOf(s.sid).map((t) => (
-                    <span key={t.code} className={"tag-chip " + (tagInfo[t.code]?.group ?? "")} title={`"${t.matched}"`}>
-                      {tagInfo[t.code]?.label ?? t.code}
-                    </span>
-                  ))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
       )}
 
       <div className="modal-actions nv-actions" style={{ marginTop: 16 }}>

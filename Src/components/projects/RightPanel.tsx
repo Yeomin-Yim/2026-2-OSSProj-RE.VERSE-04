@@ -160,9 +160,10 @@ export function RightPanel(props: Props) {
 
       <h2 style={{ margin: "20px 0 10px", fontSize: 13 }}>프로젝트 태그</h2>
       {props.projectTags.length === 0 && <span className="hint">기록을 저장하면 태그가 붙어요.</span>}
-      {props.projectTags.map((t) => (
+      {/* 이름이 없는 내부 태그 코드는 보여 주지 않는다 (D007) */}
+      {props.projectTags.filter((t) => props.tagInfo[t.code]?.label).map((t) => (
         <span key={t.code} className={"tag-chip " + (props.tagInfo[t.code]?.group ?? "")}>
-          {props.tagInfo[t.code]?.label ?? t.code}<small>{t.count}</small>
+          {props.tagInfo[t.code].label}<small>{t.count}</small>
         </span>
       ))}
     </div>

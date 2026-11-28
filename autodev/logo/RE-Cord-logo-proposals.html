@@ -1,0 +1,36 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>RE:Cord 로고 개선안</title>
+<style>
+body{margin:0;padding:32px;background:#F4F7FC;font-family:Pretendard,-apple-system,sans-serif;color:#1B2A4A}
+h1{font-size:20px;margin:0 0 4px}p.s{color:#5B6B86;font-size:13px;margin:0 0 20px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.card{background:#fff;border:1px solid #DCE4F2;border-radius:14px;padding:18px}
+.card h2{font-size:14px;margin:0 0 2px}.card small{color:#5B6B86;font-size:11.5px;display:block;min-height:48px;line-height:1.5}
+.row{display:flex;align-items:center;gap:10px;margin:14px 0}
+.word{font-weight:800;font-size:20px;letter-spacing:-.02em}
+.sizes{display:flex;align-items:flex-end;gap:14px;padding:12px;border-radius:10px;background:#F7F9FD}
+.side{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:#fff;border:1px solid #DCE4F2;font-weight:800;font-size:15px;margin-top:10px}
+.dark{background:#1B2A4A;color:#fff;border-color:#1B2A4A}
+</style>
+<h1>RE:Cord 로고 개선안 (선택 전 · 실제 로고는 바꾸지 않았음)</h1>
+<p class="s">키워드: 기록 · 경험의 연결 · 성장 · 다음 선택 · 프로젝트 중심 학습 / 코발트 블루 #2C6CCB · 옐로 #F5E385·#FADC67 유지 / 16px·24px·40px에서 확인</p>
+<div class="grid" id="g"></div>
+<script>
+const L = {
+  "현재": ['지금 사이드바·로그인의 로고. 둥근 사각형 안 R + 옐로 점. 작은 크기에서 R 다리와 점이 뭉개짐.',
+    '<rect x="3" y="3" width="26" height="26" rx="7" fill="#2C6CCB"/><circle cx="24.5" cy="8.5" r="3.2" fill="#F5E385"/><path d="M12 10v12M12 10h5a3.5 3.5 0 0 1 0 7h-5M16.5 17l4.5 5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'],
+  "A · 연결 노트": ['기록 카드(종이) 두 장이 겹치고 모서리의 옐로 점이 다음 기록으로 이어지는 선. "기록이 연결된다". 선 2개라 16px에서도 형태 유지.',
+    '<rect x="3" y="3" width="26" height="26" rx="8" fill="#2C6CCB"/><rect x="8" y="9" width="11" height="14" rx="2.5" fill="none" stroke="#fff" stroke-width="2.2"/><path d="M19 13h3.5a1.5 1.5 0 0 1 1.5 1.5V22" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".55"/><circle cx="24" cy="23" r="3" fill="#FADC67"/>'],
+  "B · R 성장 화살표": ['R 오른쪽 위로 뻗는 옐로 화살표를 더해 "성장 · 다음 선택"을 담음. 현재 로고와 가장 가까워 바꿔도 낯설지 않음.',
+    '<rect x="3" y="3" width="26" height="26" rx="8" fill="#2C6CCB"/><path d="M10 23V10h5a3.5 3.5 0 0 1 0 7h-5M15 17l5 6" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 12l4.5-4.5M21 7.5h3.5V11" fill="none" stroke="#FADC67" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>'],
+  "C · 점과 선 (콜론)": ['RE:Cord의 ":"를 두 점으로, 그 사이를 잇는 선으로 표현. 블루 점(지금 기록) → 옐로 점(다음 경험). 가장 단순, 파비콘에 유리.',
+    '<rect x="3" y="3" width="26" height="26" rx="8" fill="#2C6CCB"/><path d="M12.5 11.5L19.5 20.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".7"/><circle cx="12" cy="11" r="3.6" fill="#fff"/><circle cx="20" cy="21" r="3.6" fill="#FADC67"/>'],
+};
+const g = document.getElementById("g");
+for (const [name, [desc, svg]] of Object.entries(L)) {
+  const s = (n) => `<svg width="${n}" height="${n}" viewBox="0 0 32 32">${svg}</svg>`;
+  g.insertAdjacentHTML("beforeend", `<div class="card"><h2>${name}</h2><small>${desc}</small>
+    <div class="row">${s(40)}<span class="word">RE<span style="color:#2C6CCB">:</span>Cord</span></div>
+    <div class="sizes">${s(16)}${s(24)}${s(40)}${s(64)}</div>
+    <div class="side">${s(22)}RE:Cord</div><div class="side dark">${s(22)}RE:Cord</div></div>`);
+}
+</script></html>

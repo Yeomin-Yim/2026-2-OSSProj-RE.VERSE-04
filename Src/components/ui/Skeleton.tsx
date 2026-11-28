@@ -6,13 +6,26 @@ export function Skeleton({ w = "100%", h = 14, r = 8, style }: { w?: number | st
   return <span className="skel" style={{ width: w, height: h, borderRadius: r, ...style }} aria-hidden="true" />;
 }
 
-export function PageSkeleton({ title, layout }: { title: string; layout: "projects" | "graph" | "cards" | "steps" }) {
+/**
+ * 화면 로딩: 지금 실제로 하는 일(그 화면의 데이터를 불러오는 중)을 한 줄로 알려 준다 (D008).
+ * 서버가 진행률을 주지 않으므로 퍼센트는 보여 주지 않고, 보여 주려고 기다리게 하지도 않는다.
+ */
+export function LoadingState({ message, sub }: { message: string; sub?: string }) {
+  return (
+    <div className="load-state" role="status" aria-live="polite">
+      <span className="rc-loader sm" aria-hidden="true"><i /><i /><i /></span>
+      <span><b>{message}</b>{sub && <small>{sub}</small>}</span>
+    </div>
+  );
+}
+
+export function PageSkeleton({ title, layout, message = "자료를 불러오고 있어요.", sub }: { title: string; layout: "projects" | "graph" | "cards" | "steps"; message?: string; sub?: string }) {
   return (
     <div className="page" aria-busy="true" aria-label={`${title} 불러오는 중`}>
       <div className="page-head">
         <div>
           <h1 className="title">{title}</h1>
-          <p className="subtitle loading-dots" role="status">불러오는 중<i /><i /><i /></p>
+          <LoadingState message={message} sub={sub} />
         </div>
       </div>
       {layout === "projects" && (
