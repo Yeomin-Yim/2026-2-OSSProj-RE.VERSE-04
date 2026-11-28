@@ -8,6 +8,8 @@ import { openFile } from "@/app/(app)/projects/actions";
  * 한 번 받은 주소는 같은 화면 안에서 다시 쓴다 (편집 화면 → 미리보기에서 다시 부르지 않게).
  */
 const cache = new Map<string, string>();
+/** 이미 받은 주소를 넣어 둔다 (같은 화면 안에서 다시 부르지 않게) */
+export const rememberCoverUrl = (recordId: string, url: string) => { cache.set(recordId, url); };
 
 export function CoverImage({ recordId, alt, className }: { recordId: string; alt: string; className?: string }) {
   const [state, setState] = useState<{ id: string; url?: string; error?: string }>(() => ({ id: recordId, url: cache.get(recordId) }));

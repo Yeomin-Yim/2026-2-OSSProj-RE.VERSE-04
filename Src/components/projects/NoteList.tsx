@@ -7,7 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { useAction } from "@/components/ui/Toast";
 import { MoveNoteModal } from "./MoveNoteModal";
 import { NoteModal } from "./NoteModal";
-import { excerpt, kindIcon, kindLabel, ymd } from "./format";
+import { kindIcon, kindLabel, ymd } from "./format";
 import type { ProjectRow, RecordView, TagInfo } from "./types";
 
 interface Props {
@@ -20,7 +20,7 @@ interface Props {
   projects?: ProjectRow[];
 }
 
-/** 자료 목록: 제목 · 유형 · 날짜 · 본문 미리보기. 한 줄마다 ⋮ 메뉴(내용 보기 · 결과물 표시 · 다른 프로젝트로 옮기기 · 삭제)가 있다. */
+/** 자료 목록: 제목 · 유형 · 날짜 (내용 미리보기는 자료를 눌러 연 창에서). 한 줄마다 ⋮ 메뉴(내용 보기 · 결과물 표시 · 다른 프로젝트로 옮기기 · 삭제)가 있다. */
 export function NoteList({ records, empty, userName, projects }: Props) {
   const { pending, run } = useAction();
   const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
@@ -60,7 +60,6 @@ export function NoteList({ records, empty, userName, projects }: Props) {
   return (
     <div style={{ marginTop: 12 }}>
       {records.map((r) => {
-        const ex = excerpt(r);
         return (
         <div className="note" key={r.id}>
           <div className="ico"><Icon name={kindIcon(r.kind)} /></div>
@@ -70,7 +69,6 @@ export function NoteList({ records, empty, userName, projects }: Props) {
               {r.is_result && <span className="tag-result">결과물</span>}
             </b>
             <small>{ymd(r.recorded_at)} · {userName}{r.has_file ? " · 원본 파일" : ""}</small>
-            <span className={"excerpt" + (ex.empty ? " empty" : "")}>{ex.text}</span>
           </button>
           <span className="type">{kindLabel(r.kind)}</span>
           <button className="icon-btn" aria-label={`${r.title} 메뉴`} aria-haspopup="menu" aria-expanded={menu?.id === r.id} onClick={(e) => openMenu(e, r.id)}>

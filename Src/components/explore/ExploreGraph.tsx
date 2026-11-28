@@ -17,6 +17,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Notice } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
 import { ScrapButton, TodoList, useStudent } from "@/components/student/StudentData";
+import { postingScrapInput } from "@/components/scraps/posting";
 import type { GraphProject } from "@/components/graph/GraphView";
 import type { ExNode, ExploreData } from "@/lib/server/explore/explore";
 import { LENS_LABEL, type LensKey } from "@/lib/core/recommend/lenses";
@@ -605,7 +606,8 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
         <h2>{o.company}</h2>
         <PostingBadges o={o} />
         <p className="desc">{o.title}</p>
-        {demo && <div className="panel-scrap"><button className="scrap-btn" disabled title="시연 모드에서는 스크랩할 수 없어요"><Icon name="star" /></button><span>시연 모드에서는 스크랩을 저장하지 않아요</span></div>}
+        {demo ? <div className="panel-scrap"><button className="scrap-btn" disabled title="시연 모드에서는 스크랩할 수 없어요"><Icon name="star" /></button><span>시연 모드에서는 스크랩을 저장하지 않아요</span></div>
+          : <PostingScrap node={node} jobLabel={data.career.children.find((j) => j.id === node.parentId)?.label} />}
         <PostingBody o={o} url={demo ? null : node.url ?? null} />
         {!demo && <button className="btn ghost pt-all" onClick={() => onPostings(node.parentId!, node.id)}>이 직무 공고 모두 보기</button>}
         <TodoList todoKey={"posting:" + node.id} defaults={o.checklist ?? CHECKLIST.posting} title="지원 체크리스트" />
@@ -758,6 +760,20 @@ function NotePanel({ note, projects, onProject }: { note: GraphNote; projects: G
 
 // ───────── 채용공고 목록 (시연 모드에서만 데이터가 있다) ─────────
 
+/** 채용공고 ★ (D016): 스크랩 화면의 '채용공고' 탭으로 모인다 */
+function PostingScrap({ node, jobLabel }: { node: ExNode; jobLabel?: string }) {
+  const { isScrapped, readOnly } = useStudent();
+  const input = postingScrapInput(node, jobLabel);
+  if (!input) return null;
+  const on = isScrapped(input.type, input.ref_id);
+  return (
+    <div className="panel-scrap">
+      <ScrapButton input={input} />
+      <span>{readOnly ? "시연 모드에서는 저장하지 않아요" : on ? "스크랩했어요 · 스크랩 > 채용공고에서 볼 수 있어요" : "공고 스크랩"}</span>
+    </div>
+  );
+}
+
 function Postings({ data, jobId, hi, onClose }: { data: ExploreData; jobId: string; hi: string | null; onClose: () => void }) {
   const job = data.career.children.find((j) => j.id === jobId);
   const list = data.career.next[jobId] ?? [];
@@ -781,6 +797,7 @@ function Postings({ data, jobId, hi, onClose }: { data: ExploreData; jobId: stri
                 </span>
                 <PostingBadges o={n.posting} compact />
                 <span className="mt">{n.posting.location}{n.posting.start ? ` · ${n.posting.start.slice(5).replace("-", "/")} 등록` : ` · 마감 ${n.posting.deadline}`}</span>
+                {!data.demo && (() => { const input = postingScrapInput(n, job.label); return input && <ScrapButton input={input} className="pt-scrap" />; })()}
               </summary>
               <div className="pb">
                 <PostingBody o={n.posting} url={data.demo ? null : n.url ?? null} />

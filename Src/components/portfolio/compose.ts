@@ -18,10 +18,15 @@
 import { splitText, type PortfolioSource } from "../../lib/core/index.ts";
 
 export type Variant = "simple" | "detailed";
-export type Origin = "ai" | "overview" | "record" | "info" | "simple" | "edited";
+export type BaseOrigin = "ai" | "overview" | "record" | "info" | "simple" | "edited";
+/** 주 출처(AI 초안·개요·간단형 글) 뒤에 같은 항목 표현의 기록 원문 문장을 덧붙인 경우 "+record" (D011) */
+export type Origin = BaseOrigin | "ai+record" | "overview+record" | "simple+record";
+/** 배지 CSS 클래스 ("+"는 클래스 이름에 쓰지 않는다) */
+export const originClass = (o: Origin) => (o.endsWith("+record") ? o.replace("+record", "") + " plus" : o);
 
-export const SIMPLE_KEYS = ["intro", "problem", "role", "process", "result"] as const;
-export const DETAILED_KEYS = ["d_problem", "d_role", "d_process", "d_trial", "d_feedback", "d_result", "d_learning", "d_next"] as const;
+// 간단형: 핵심을 빠르게 (프로젝트당 A4 가로 1쪽) · 상세형: 탐구·기여·성장을 입증 (내용 양에 따라 1~4쪽) — D015
+export const SIMPLE_KEYS = ["intro", "problem", "role", "process", "result", "learn"] as const;
+export const DETAILED_KEYS = ["d_problem", "d_goal", "d_role", "d_process", "d_decision", "d_trial", "d_feedback", "d_result", "d_learning", "d_next"] as const;
 export type SecKey = (typeof SIMPLE_KEYS)[number] | (typeof DETAILED_KEYS)[number];
 
 export type ProjectContent = Partial<Record<SecKey, string>> & {
@@ -44,25 +49,28 @@ export interface SectionDef {
 }
 
 export const SIMPLE_SECTIONS: SectionDef[] = [
-  { key: "intro", no: "", label: "프로젝트 한 줄 소개", guide: "이 프로젝트를 한 문장으로 소개해요.", soft: 80, rows: 2, single: true },
-  { key: "problem", no: "2", label: "문제와 목표", guide: "어떤 문제를 해결하려 했나요?", soft: 300, rows: 5 },
-  { key: "role", no: "3", label: "나의 역할", guide: "어떤 활동을 담당했고, 실제로 기여한 부분은 무엇인가요?", soft: 300, rows: 5 },
-  { key: "process", no: "4", label: "실행 과정", guide: "어떤 방식으로 프로젝트를 진행했나요?", soft: 300, rows: 5 },
-  { key: "result", no: "5", label: "결과와 배움", guide: "무엇을 만들거나 달성했고, 무엇을 배우고 성장했나요?", soft: 350, rows: 6 },
+  { key: "intro", no: "", label: "프로젝트 한 줄 소개", guide: "이 프로젝트를 한 문장으로 소개해요. 표지·목록에도 쓰여요.", soft: 80, rows: 2, single: true },
+  { key: "problem", no: "2", label: "프로젝트 개요 및 목표", guide: "어떤 문제를 보고 무엇을 하려 했나요? (2~3문장)", soft: 160, rows: 4 },
+  { key: "role", no: "3", label: "나의 핵심 역할", guide: "내가 맡고 직접 한 일 중 가장 중요한 것 (2~3문장)", soft: 150, rows: 4 },
+  { key: "process", no: "4", label: "주요 실행 과정", guide: "어떤 방법으로 진행했나요? (2~3문장)", soft: 160, rows: 4 },
+  { key: "result", no: "5", label: "대표 결과물 및 성과", guide: "무엇을 만들고 무엇을 확인했나요? (1~2문장)", soft: 130, rows: 3 },
+  { key: "learn", no: "6", label: "배운 점", guide: "이 프로젝트로 배운 한 가지 (1~2문장)", soft: 110, rows: 3 },
 ];
 
 export const DETAILED_SECTIONS: SectionDef[] = [
-  { key: "d_problem", no: "1", label: "프로젝트 배경과 문제 정의", guide: "프로젝트를 시작한 계기와 해결하려던 문제를 적어요.", soft: 500, rows: 6 },
-  { key: "d_role", no: "2", label: "나의 역할과 구체적인 기여", guide: "팀 전체가 아니라 내가 맡고 직접 한 일이 드러나게 적어요.", soft: 500, rows: 6 },
-  { key: "d_process", no: "3", label: "탐구 및 실행 과정", guide: "조사·인터뷰·제작 등 진행한 순서대로 적어요.", soft: 600, rows: 7 },
-  { key: "d_trial", no: "4", label: "시행착오와 문제 해결", guide: "막혔던 지점과 어떻게 바꿔서 해결했는지 적어요.", soft: 500, rows: 6 },
-  { key: "d_feedback", no: "5", label: "피드백 및 수정 과정", guide: "받은 의견과 그에 따라 고친 점을 적어요.", soft: 500, rows: 6 },
-  { key: "d_result", no: "6", label: "프로젝트 결과와 성과", guide: "만든 결과물과 달라진 점을 기록에 있는 사실로 적어요.", soft: 500, rows: 6 },
-  { key: "d_learning", no: "8", label: "배움과 성장", guide: "이 프로젝트로 배운 점과 달라진 생각을 적어요.", soft: 500, rows: 6 },
-  { key: "d_next", no: "9", label: "향후 발전 방향", guide: "아쉬웠던 점과 다음에 해 보고 싶은 개선을 적어요.", soft: 400, rows: 5 },
+  { key: "d_problem", no: "1", label: "프로젝트 배경과 문제 정의", guide: "시작한 배경, 문제를 발견한 계기, 조사·관찰로 확인한 내용, 해결할 문제의 범위", soft: 600, rows: 7 },
+  { key: "d_goal", no: "2", label: "프로젝트 목표 및 접근 방식", guide: "무엇을 목표로 했고 어떤 방법으로 접근하기로 했나요?", soft: 400, rows: 5 },
+  { key: "d_role", no: "3", label: "나의 역할과 구체적인 기여", guide: "직접 맡은 업무, 수행 방법, 내가 내린 판단, 팀 결과에 기여한 부분 (개인 기여가 확인되는 것만)", soft: 600, rows: 7 },
+  { key: "d_process", no: "4", label: "탐구 및 조사 과정", guide: "어떤 자료를 어떤 방법·도구로 수집하고 분석했나요?", soft: 700, rows: 8 },
+  { key: "d_decision", no: "5", label: "주요 실행 단계와 의사결정", guide: "어떤 순서로 진행했고, 중간에 무엇을 왜 결정했나요?", soft: 600, rows: 7 },
+  { key: "d_trial", no: "6", label: "시행착오와 문제 해결", guide: "문제 발생 → 원인 파악 → 해결 시도 → 수정 결과", soft: 500, rows: 6 },
+  { key: "d_feedback", no: "7", label: "피드백과 개선", guide: "실제로 받은 피드백, 고친 이유와 내용, 고친 뒤 확인한 결과", soft: 500, rows: 6 },
+  { key: "d_result", no: "8", label: "프로젝트 결과와 성과", guide: "최종 결과물과 특징, 확인된 성과, 해결하지 못한 한계", soft: 600, rows: 7 },
+  { key: "d_learning", no: "10", label: "성찰과 성장", guide: "새로 배운 것, 활동 전후 달라진 접근, 발전한 역량", soft: 500, rows: 6 },
+  { key: "d_next", no: "11", label: "향후 발전 방향", guide: "이후 프로젝트와의 연결, 다음에 시도하고 싶은 것", soft: 350, rows: 4 },
 ];
-/** 상세형 7번(증빙자료)은 글이 아니라 자료 선택이라 따로 그린다 */
-export const EVIDENCE_NO = "7";
+/** 상세형 9번(증빙자료)은 글이 아니라 자료 선택이라 따로 그린다 */
+export const EVIDENCE_NO = "9";
 
 export const sectionsFor = (v: Variant) => (v === "simple" ? SIMPLE_SECTIONS : DETAILED_SECTIONS);
 export const keysFor = (v: Variant): readonly SecKey[] => (v === "simple" ? SIMPLE_KEYS : DETAILED_KEYS);
@@ -74,6 +82,9 @@ export const ORIGIN_LABEL: Record<Origin, string> = {
   info: "프로젝트 정보",
   simple: "간단형 글에서 옮김",
   edited: "직접 수정함",
+  "ai+record": "AI 초안 + 기록 발췌",
+  "overview+record": "개요 + 기록 발췌",
+  "simple+record": "간단형 글 + 기록 발췌",
 };
 export const ORIGIN_HINT: Record<Origin, string> = {
   ai: "기록 문장을 근거로 AI가 쓴 초안이에요. 근거 문장이 실제로 있는지 코드가 확인했어요.",
@@ -82,6 +93,9 @@ export const ORIGIN_HINT: Record<Origin, string> = {
   info: "프로젝트 주제(정보)를 그대로 옮겼어요.",
   simple: "간단형에 쓴 글을 옮겼어요.",
   edited: "직접 고친 글이에요. 다시 채우기를 해도 바뀌지 않아요.",
+  "ai+record": "AI 초안(근거 문장 확인됨) 뒤에, 같은 항목에 해당하는 기록 원문 문장을 고치지 않고 덧붙였어요. 겹치는 내용은 지워 주세요.",
+  "overview+record": "개요의 글 뒤에, 같은 항목에 해당하는 기록 원문 문장을 고치지 않고 덧붙였어요.",
+  "simple+record": "간단형에 쓴 글 뒤에, 같은 항목에 해당하는 기록 원문 문장을 덧붙였어요.",
 };
 
 /** AI 초안 3섹션의 글 (draftProject 결과에서 text 만) */
@@ -90,13 +104,16 @@ export interface AiTexts { problem?: string; role?: string; result?: string }
 // 기록 문장 발췌에 쓰는 표현 (lib/core/projects/checks.ts KW 와 같은 계열, 항목별로 조금 넓힘)
 const RE = {
   problem: /문제|불편|어려움|계기|왜 |필요성|해결하고/u,
-  role: /내가|제가|맡았|맡아|맡은|담당|역할|직접/u,
+  role: /내가|제가|나는 |저는 |맡았|맡아|맡은|담당|역할|직접/u,
   process: /인터뷰|조사|관찰|설문|시도|제작|분석|실험|진행했|만들었|만들어|정리했/u,
   trial: /어려웠|어려움|실패|막혔|막히|오류|안 됐|안됐|잘 안|문제가 생|문제였|해결했|해결하|바꿨|바꾸었|다시 /u,
   feedback: /피드백|의견|조언|코멘트|반응|지적|질문을 받|반영|수정했|고쳤/u,
   result: /완성|결과|시안|발표|달라졌|변화|만들었|개선됐|줄었|늘었/u,
   learning: /배운|배웠|느낀|느꼈|깨달|성장|알게 되/u,
   next: /다음에|다음엔|다음에는|앞으로|보완|개선하고|아쉬|더 해 보|해보고 싶/u,
+  goal: /목표|목적|하고자|하려고|하기로 했|계획|방향|접근|가설|기대/u,
+  research: /인터뷰|조사|관찰|설문|수집|분석|자료|측정|실험|문헌|통계|데이터|응답/u,
+  decision: /결정|정했|정하고|선택|확정|합의|동의|하기로|채택|기준|순서|단계|우선/u,
 } as const;
 
 const MIN_SENT = 8;
@@ -105,13 +122,13 @@ const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 const firstSentence = (t: string | undefined) => (t ? splitText(t)[0] ?? "" : "");
 
 /** 기록 원문에서 표현이 맞는 문장을 그대로 고른다 (같은 문장은 한 번만, 최대 max 개) */
-export function pickSentences(records: PortfolioSource["records"], re: RegExp, used: Set<string>, max = 3): string[] {
+export function pickSentences(records: PortfolioSource["records"], re: RegExp, used: Set<string>, max = 3, exclude?: RegExp): string[] {
   const out: string[] = [];
   for (const r of records) {
     for (const s of splitText(r.text || "")) {
       if (out.length >= max) return out;
       const t = norm(s), key = t;
-      if (t.length < MIN_SENT || t.length > MAX_SENT || used.has(key) || !re.test(t)) continue;
+      if (t.length < MIN_SENT || t.length > MAX_SENT || used.has(key) || !re.test(t) || exclude?.test(t)) continue;
       used.add(key);
       out.push(t);
     }
@@ -143,23 +160,35 @@ export function fillMissing(
   const used = new Set<string>();
   for (const k of [...SIMPLE_KEYS, ...DETAILED_KEYS]) for (const s of splitText(cur[k] ?? "")) used.add(norm(s));
   // 여러 표현 묶음을 차례로 찾아 합친다 (예: 결과와 배움 = 결과 2문장 + 배움 2문장)
+  // 성찰·향후 방향이 아닌 항목에는 배움·다음 계획 문장을 넣지 않는다 ("문제"라는 단어만으로 회고 문장이 섞이지 않게)
+  const REFLECT = /배운|배웠|배우게|깨달|느낀|느꼈|다음엔|다음에는|앞으로/u;
+  const isReflect = (re: RegExp) => re === RE.learning || re === RE.next;
   const rec = (...res: RegExp[]): Cand => () => {
-    const got = res.flatMap((re) => pickSentences(source.records, re, used, res.length > 1 ? 2 : 3));
+    const per = variant === "simple" ? (res.length > 1 ? 1 : 2) : (res.length > 1 ? 3 : 6);
+    const got = res.flatMap((re) => pickSentences(source.records, re, used, per, isReflect(re) ? undefined : REFLECT));
     return got.length ? [got.join("\n"), "record"] : null;
   };
+
+  // 개요 역할이 "설문 설계 · 사용자 조사 · …" 같은 키워드 나열이면 "담당:" 한 줄로 두고 기록 문장을 붙인다 (D015)
+  const isKeywords = (t: string | undefined) => !!t && !/[.!?。다요]\s*$/.test(t.trim()) && /[·,/]/.test(t);
+  const roleLine = o.role && isKeywords(o.role) ? `담당: ${o.role.trim()}` : o.role;
+  const approach = o.activity ? `접근 방식: ${o.activity.trim()}` : "";
 
   const plan: Partial<Record<SecKey, Cand[]>> = variant === "simple"
     ? {
         intro: [txt(source.topic ?? "", "info"), txt(firstSentence(o.activity), "overview"), txt(firstSentence(o.problem), "overview")],
         problem: [txt(ai.problem, "ai"), txt(o.problem, "overview"), rec(RE.problem)],
-        role: [txt(ai.role, "ai"), txt(joinOv(o, ["role", "activity"]), "overview"), rec(RE.role)],
+        role: [txt(ai.role, "ai"), txt(roleLine, "overview"), rec(RE.role)],
         process: [txt(o.process, "overview"), rec(RE.process)],
-        result: [txt(ai.result, "ai"), txt(joinOv(o, ["result", "reflection"]), "overview"), rec(RE.result, RE.learning)],
+        result: [txt(o.result, "overview"), txt(ai.result, "ai"), rec(RE.result)],
+        learn: [txt(o.reflection, "overview"), rec(RE.learning)],
       }
     : {
         d_problem: [txt(ai.problem, "ai"), txt(prior.problem, "simple"), txt(o.problem, "overview"), rec(RE.problem)],
-        d_role: [txt(o.role, "overview"), txt(ai.role, "ai"), txt(prior.role, "simple"), rec(RE.role)],
-        d_process: [txt(joinOv(o, ["process", "activity"]), "overview"), rec(RE.process)],
+        d_goal: [txt(approach, "overview"), rec(RE.goal)],
+        d_role: [txt(roleLine, "overview"), txt(ai.role, "ai"), txt(prior.role, "simple"), rec(RE.role)],
+        d_process: [txt(o.process, "overview"), rec(RE.research)],
+        d_decision: [rec(RE.decision)],
         d_trial: [rec(RE.trial)],
         d_feedback: [rec(RE.feedback)],
         d_result: [txt(o.result, "overview"), txt(ai.result, "ai"), txt(prior.result, "simple"), rec(RE.result)],
@@ -167,14 +196,27 @@ export function fillMissing(
         d_next: [rec(RE.next)],
       };
 
+  // 주 출처 뒤에 덧붙일 기록 원문 표현 (항목별)
+  const SUPP: Record<SecKey, RegExp[]> = {
+    intro: [], problem: [RE.problem], role: [RE.role], process: [RE.process], result: [RE.result], learn: [RE.learning],
+    d_problem: [RE.problem], d_goal: [RE.goal], d_role: [RE.role], d_process: [RE.research], d_decision: [RE.decision], d_trial: [RE.trial], d_feedback: [RE.feedback],
+    d_result: [RE.result], d_learning: [RE.learning], d_next: [RE.next],
+  };
   for (const k of keysFor(variant)) {
     if (cur[k] !== undefined) continue;
     let hit: [string, Origin] | null = null;
     for (const c of plan[k] ?? []) { hit = c(); if (hit) break; }
+    if (hit) for (const s of splitText(hit[0])) used.add(norm(s));
+    // AI 초안·개요가 짧게 요약한 항목은 같은 항목의 기록 원문 문장으로 보강한다 (원문 그대로, D011)
+    if (hit && (hit[1] === "ai" || hit[1] === "overview" || hit[1] === "simple")) {
+      // 간단형은 압축(주 출처 + 1문장), 상세형은 실제 과정이 드러나게 (AI 초안 + 3 / 개요 한 줄 + 5)
+      const max = variant === "simple" ? (hit[1] === "ai" ? 0 : 1) : (hit[1] === "ai" ? 3 : 5);
+      const extra = SUPP[k].flatMap((re) => pickSentences(source.records, re, used, max, isReflect(re) ? undefined : REFLECT)).slice(0, max);
+      if (extra.length) hit = [hit[0] + "\n\n" + extra.join("\n"), (hit[1] + "+record") as Origin];
+    }
     cur[k] = hit ? hit[0] : "";
     if (hit) cur._src![k] = hit[1];
     else delete cur._src![k];
-    if (hit) for (const s of splitText(hit[0])) used.add(norm(s));
   }
   return cur;
 }
@@ -267,4 +309,21 @@ export function altWarnings(text: string, limit = 100): string[] {
   const org = text.match(/[가-힣A-Za-z]*(대학교|고등학교|중학교|캠퍼스|재단|협회|센터|연구소|주식회사|\(주\))/u);
   if (org) w.push(`기관명("${org[0]}")은 쓰지 않아요`);
   return w;
+}
+
+// ───── 표지·나의 소개 / 성장 정리의 기본값 (기록 원문 발췌만, 새 문장 없음 · D011)
+
+/**
+ * 나의 소개: 각 프로젝트의 문제(시작 계기) 첫 문장, 앞으로의 방향: 기록의 "다음에·앞으로" 문장.
+ * 학생이 비워 둔 칸을 채울 때만 쓴다 (학생이 누르거나, 처음 만들 때).
+ */
+export function profileFromRecords(sources: PortfolioSource[], content: ContentMap, variant: Variant): { motivation: string; aspiration: string } {
+  const key: SecKey = variant === "simple" ? "problem" : "d_problem";
+  const motivation = sources
+    .map((p) => firstSentence(content[p.id]?.[key] ?? "") || firstSentence(p.overview?.problem))
+    .filter(Boolean)
+    .join("\n");
+  const used = new Set<string>();
+  const aspiration = sources.flatMap((p) => pickSentences(p.records, RE.next, used, 2)).slice(0, 4).join("\n");
+  return { motivation, aspiration };
 }

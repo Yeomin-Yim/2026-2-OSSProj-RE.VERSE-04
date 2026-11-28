@@ -27,7 +27,8 @@ test("간단형: 모든 항목이 채워지고 출처가 붙는다 (AI 없이도
   const c = fillMissing(undefined, src(), "simple");
   assert.equal(c.intro, "교내 일회용컵 줄이기");
   assert.equal(c._src?.intro, "info");
-  for (const k of ["problem", "role", "process", "result"] as const) {
+  // 간단형 "결과"는 결과 표현만 찾는다 (이 기록에는 결과 문장이 없어 비어 있는 게 맞다, D015). 배움은 "배운 점"으로
+  for (const k of ["problem", "role", "process", "learn"] as const) {
     assert.ok(c[k], `${k} 비어 있음`);
     assert.equal(c._src?.[k], "record");
   }
@@ -45,10 +46,12 @@ test("발췌는 기록 문장을 고치지 않고 옮기며 같은 문장을 두
 test("AI 초안 → 개요 → 기록 순서로 채운다", () => {
   const s = src({ overview: { problem: "개요의 문제", role: "개요의 역할", process: "개요의 과정", reflection: "개요의 회고" } });
   const c = fillMissing(undefined, s, "simple", { ai: { problem: "AI 문제", role: "", result: "AI 결과" } });
+  // 주 출처가 맨 앞에 오고, 같은 항목 표현의 기록 원문 문장이 뒤에 붙는다 (D011)
+  // 간단형은 압축: AI 초안에는 발췌를 덧붙이지 않는다 (D015)
   assert.equal(c.problem, "AI 문제"); assert.equal(c._src?.problem, "ai");
-  assert.equal(c.role, "개요의 역할"); assert.equal(c._src?.role, "overview");
-  assert.equal(c.process, "개요의 과정");
-  assert.equal(c.result, "AI 결과");
+  assert.ok(c.role!.startsWith("개요의 역할")); assert.equal(c._src?.role, "overview+record");
+  assert.ok(c.process!.startsWith("개요의 과정"));
+  assert.ok(c.result!.startsWith("AI 결과"));
 });
 
 test("근거가 없으면 비워 두고 출처를 붙이지 않는다 (추측해서 채우지 않음)", () => {
@@ -61,7 +64,7 @@ test("이미 있는 값(지운 빈 값 포함)은 덮어쓰지 않는다", () =>
   const c = fillMissing(before, src(), "simple", { ai: { problem: "AI", role: "AI 역할", result: "AI 결과" } });
   assert.equal(c.problem, "내가 고친 문제");
   assert.equal(c.role, "");
-  assert.equal(c.result, "AI 결과");
+  assert.ok(c.result!.startsWith("AI 결과"));
 });
 
 test("다시 채우기는 직접 고친 항목을 남긴다", () => {
@@ -70,15 +73,15 @@ test("다시 채우기는 직접 고친 항목을 남긴다", () => {
   assert.equal(editedCount(c, "simple"), 1);
   const r = refill(c, src(), "simple", { ai: { problem: "새 AI 문제" } });
   assert.equal(r.role, "직접 쓴 역할");
-  assert.equal(r.problem, "새 AI 문제");
+  assert.ok(r.problem!.startsWith("새 AI 문제"));
 });
 
 test("형식을 바꿔도 다른 형식의 글은 그대로 남는다", () => {
   const simple = edit(fillMissing(undefined, src(), "simple"), "problem", "간단형 문제");
   const both = fillMissing(simple, src(), "detailed", { prior: { problem: simple.problem } });
   for (const k of SIMPLE_KEYS) assert.equal(both[k], simple[k]);
-  assert.equal(both.d_problem, "간단형 문제");
-  assert.equal(both._src?.d_problem, "simple");
+  assert.ok(both.d_problem!.startsWith("간단형 문제"));
+  assert.match(both._src?.d_problem ?? "", /^simple/);
 });
 
 test("pickSentences: 짧은 조각과 이미 쓴 문장은 건너뛴다", () => {
@@ -110,4 +113,38 @@ test("대체서식 점검: 글자 수 초과와 기관명", () => {
   assert.deepEqual(altWarnings("짧은 글"), []);
   assert.equal(altWarnings("가".repeat(105))[0], "5자 넘어요");
   assert.match(altWarnings("거꾸로캠퍼스에서 진행함.")[0], /기관명/);
+});
+
+test("보강 문장도 원문 그대로이고, 주 출처가 없는 항목은 발췌만 쓴다", () => {
+  const s = src({ overview: { process: "개요의 과정" } });
+  const c = fillMissing(undefined, s, "detailed");
+  const all = s.records.map((r) => r.text).join(" ");
+  const extra = c.d_process!.split("\n\n")[1]?.split("\n") ?? [];
+  assert.ok(extra.length > 0);
+  for (const l of extra) assert.ok(all.includes(l));
+  assert.equal(c._src?.d_trial, "record");
+});
+
+test("상세형: 키워드 나열인 개요 역할은 '담당:' 한 줄 + 기록 문장, 목표·의사결정 항목도 채운다", () => {
+  const s = src({ overview: { role: "설문 설계 · 데이터 정리", activity: "설문·인터뷰" } });
+  s.records.push({ id: "r9", title: "5차 회의록", text: "반납대는 급식실 앞에 두기로 결정했다. 이번 학기 목표는 반납률을 확인하는 것이다." });
+  const c = fillMissing(undefined, s, "detailed");
+  assert.ok(c.d_role!.startsWith("담당: 설문 설계 · 데이터 정리"));
+  assert.match(c.d_role!, /맡았다/);
+  assert.ok(c.d_goal!.startsWith("접근 방식: 설문·인터뷰"));
+  assert.match(c.d_decision ?? "", /결정했다/);
+});
+
+test("간단형은 압축, 상세형은 더 많은 기록 문장을 쓴다 (같은 데이터)", () => {
+  const s = src({ overview: { process: "개요의 과정" } });
+  const simple = fillMissing(undefined, s, "simple"), detailed = fillMissing(undefined, s, "detailed");
+  const len = (c: Record<string, unknown>, keys: readonly string[]) => keys.reduce((n, k) => n + String(c[k] ?? "").length, 0);
+  assert.ok(len(detailed, DETAILED_KEYS) > len(simple, SIMPLE_KEYS));
+});
+
+test("성찰·향후 방향이 아닌 항목에는 배움·다음 계획 문장을 넣지 않는다", () => {
+  const s = src({ records: [{ id: "x", title: "회고", text: "문제를 좁혀 가는 과정에서 근거로 말하는 법을 배웠다. 급식실 앞 컵이 많아 불편하다는 문제가 있었다." }] });
+  const c = fillMissing(undefined, s, "detailed");
+  assert.doesNotMatch(c.d_problem ?? "", /배웠다/);
+  assert.match(c.d_learning ?? "", /배웠다/);
 });

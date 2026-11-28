@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { draftProject, refineText, savePortfolio } from "@/app/(app)/portfolio/actions";
+import { draftProject, savePortfolio } from "@/app/(app)/portfolio/actions";
 import { kindIcon, kindLabel, ymd } from "@/components/projects/format";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
@@ -21,18 +21,20 @@ import { Notice } from "@/components/ui/Notice";
 import { Segmented } from "@/components/ui/Segmented";
 import { useToast } from "@/components/ui/Toast";
 import {
-  CHECK_LABEL, CHECK_ORDER, REFINE_LABEL, TEMPLATES, wordDiff, altRow, emptyAltRow, emptyProfile, period, promptsFor, templateList, topTags,
-  type AltRow, type CheckKey, type PortfolioSource, type ProfileDraft, type ProjectDraft, type RefineMode, type TemplateId,
+  CHECK_LABEL, CHECK_ORDER, TEMPLATES, altRow, emptyAltRow, emptyProfile, period, promptsFor, templateList, topTags,
+  type AltRow, type CheckKey, type PortfolioSource, type ProfileDraft, type ProjectDraft, type TemplateId,
 } from "@/lib/core/index.ts";
 import type { ProjectRow } from "@/lib/server/projects";
 import type { Portfolio } from "@/lib/server/student/portfolio";
 import {
-  altContent, edit, editedCount, fillMissing, photoFiles, refill, sectionsFor, totalLength, withEvidenceDefaults,
+  altContent, edit, editedCount, fillMissing, originClass, photoFiles, profileFromRecords, refill, sectionsFor, totalLength, withEvidenceDefaults,
   EVIDENCE_NO, META, ORIGIN_HINT, ORIGIN_LABEL,
   type AiTexts, type ContentMap, type FileInfo, type ProjectContent, type SecKey, type SectionDef, type Variant,
 } from "./compose";
 import { CoverImage } from "./CoverImage";
-import { AltSheet, PortfolioSheet, type AltRowX } from "./Sheets";
+import { AltSheet, type AltRowX } from "./Sheets";
+import { emptyItems, LandscapeDocument } from "./LandscapeDocument";
+import { PrintPortal, waitForPrintAssets } from "./PrintPortal";
 
 export type PickProject = ProjectRow & { checks: Record<CheckKey, boolean>; source: PortfolioSource; files: FileInfo[] };
 type Step = 1 | 2 | 3;
@@ -44,12 +46,12 @@ const MAX = 1000;
 const pad = (n: number) => String(n).padStart(2, "0");
 const VARIANT_INFO: Record<Variant, { label: string; pages: string; target: number; desc: string; items: string[] }> = {
   simple: {
-    label: "간단형", pages: "프로젝트당 약 1쪽", target: 1300,
+    label: "간단형", pages: "프로젝트당 약 1쪽", target: 700,
     desc: "여러 프로젝트를 부담 없이 정리하는 1쪽 사례집",
     items: ["프로젝트 정보 · 대표 이미지 · 한 줄 소개", "문제와 목표", "나의 역할", "실행 과정", "결과와 배움"],
   },
   detailed: {
-    label: "상세형", pages: "프로젝트당 약 2쪽", target: 3500,
+    label: "상세형", pages: "프로젝트당 약 2~4쪽", target: 1800,
     desc: "진학·면접·발표에서 경험을 깊이 설명하는 2쪽 구성",
     items: ["배경과 문제 정의 · 역할과 기여", "탐구·실행 과정 · 시행착오와 해결", "피드백과 수정 · 결과와 성과", "증빙자료 · 배움과 성장 · 향후 방향"],
   },
@@ -78,6 +80,8 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
   const filesOf = Object.fromEntries(projects.map((p) => [p.id, p.files])) as Record<string, FileInfo[]>;
   const known = (ids: string[]) => ids.filter((id) => sources[id]);
   const start = unpack(initial.content);
+  // 새 구성(D015) 전에 만든 초안: 학생 글 보호 원칙상 자동으로 바꾸지 않고, "초안 다시 만들기"를 안내한다
+  const [legacy] = useState(() => new Set(Object.entries(start.content).filter(([, c]) => c && (c.problem !== undefined || c.d_problem !== undefined) && c.d_goal === undefined && c.learn === undefined).map(([pid]) => pid)));
 
   const [id, setId] = useState(initial.id);
   const [type, setType] = useState<TemplateId>(initialType ?? initial.template_id);
@@ -96,11 +100,9 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
   const [flash, setFlash] = useState(false);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [drafting, setDrafting] = useState(false);
-  // 문장 다듬기: 마지막으로 만진 섹션의 textarea 와 그 선택 범위를 쓴다 (프로토타입 focusSec)
-  const areas = useRef<Partial<Record<SecKey, HTMLTextAreaElement | HTMLInputElement | null>>>({});
-  const focusSec = useRef<SecKey | null>(null);
-  const [refining, setRefining] = useState<RefineMode | null>(null);
-  const [diff, setDiff] = useState<{ mode: RefineMode; pid: string; sec: SecKey; secName: string; start: number; end: number; original: string; text: string; changed: boolean } | null>(null);
+  // 미리보기에서 잰 쪽 번호 (목차에 쓰고, 인쇄본에도 같은 값을 넘긴다)
+  const [pageTotal, setPageTotal] = useState(0);
+  const [printing, setPrinting] = useState(false);
 
   // ───── 주소의 ?step 을 맞춘다 (뒤로 가기 대신 단계 표시를 눌러 이동)
   const setStep = (s: Step) => {
@@ -184,18 +186,18 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
           {templateList().map((t) => {
             const on = t.id === type;
             const bullets: [string, string][] = t.type === "portfolio"
-              ? [["간단형 · 상세형 중 선택", "프로젝트당 약 1쪽 / 약 2쪽"], ["1쪽 프로필 · 마지막 쪽 자기소개서", "사람인 이력서 템플릿 디자인"], ["기록으로 채운 초안부터 시작", "고치고 싶은 문장만 고쳐요"]]
+              ? [["간단형 · 상세형 중 선택", "프로젝트당 약 1~2쪽 / 약 2~4쪽"], ["표지 · 나의 소개 · 목차 · 성장 정리", "A4 세로 프로젝트 사례집, 미리보기 그대로 PDF 저장"], ["기록으로 채운 초안부터 시작", "고치고 싶은 문장만 고쳐요"]]
               : t.bullets ?? [];
             return (
               <button key={t.id} className={"type-card tpl" + (on ? " sel" : "")} role="radio" aria-checked={on}
                 onClick={() => { setType(t.id); queue({ template_id: t.id }); }}>
                 <span className="radio"><Icon name="check" /></span>
                 <h3>{t.name}</h3>
-                <div className="d">{t.desc}</div>
+                <div className="d">{t.type === "portfolio" ? "내 프로젝트 기록으로 표지부터 증빙 부록까지 담은 A4 포트폴리오를 만들어요." : t.desc}</div>
                 <div className="body"><ul>
                   {bullets.map(([b, s]) => <li key={b}><span className="ck"><Icon name="check" /></span><span><b>{b}</b><small>{s}</small></span></li>)}
                 </ul></div>
-                <div className="ref">레퍼런스 · {t.ref}</div>
+                {t.type !== "portfolio" && <div className="ref">레퍼런스 · {t.ref}</div>}
               </button>
             );
           })}
@@ -265,7 +267,7 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
     const rows = [...keep.filter((r) => r.pid || r.name || r.content), ...keep.filter((r) => !(r.pid || r.name || r.content))];
     while (rows.length < (TEMPLATES["altform-dongguk-2027"].minRows ?? 5)) rows.push(emptyAltRow());
     const nextAlt = { ...alt, rows: rows.slice(0, TEMPLATES["altform-dongguk-2027"].maxRows ?? 10) as AltRow[] };
-    const nextProfile = profile ?? { ...emptyProfile(), skills: topTags(nextOrder.map((p) => sources[p])).join(", ") };
+    const nextProfile = profile ?? { ...emptyProfile(), skills: topTags(nextOrder.map((p) => sources[p])).join(", "), ...profileFromRecords(nextOrder.map((p) => sources[p]), nextContent, variant) };
     setOrder(nextOrder); setContent(nextContent); setAlt(nextAlt); setProfile(nextProfile); setBuilt(true);
     setCur(nextOrder.includes(cur) ? cur : nextOrder[0]);
     queue({ template_id: type, project_ids: nextOrder, content: pack(nextContent, variant), alt: nextAlt, profile: nextProfile, built_at: new Date().toISOString() });
@@ -419,46 +421,6 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
     putContent({ ...content, [pid]: next });
     toast(`${ORIGIN_LABEL[next._src?.[sec.key] ?? "record"]} · 읽어 보고 다듬어 주세요`);
   }
-  async function refine(mode: RefineMode) {
-    const pid = cur, sec = focusSec.current;
-    if (!sec) return toast("다듬을 항목의 글을 먼저 눌러 주세요.");
-    const t = areas.current[sec];
-    const value = content[pid]?.[sec] ?? "";
-    const a = t?.selectionStart ?? 0, b = t?.selectionEnd ?? 0, whole = !(b > a);
-    const start = whole ? 0 : a, end = whole ? value.length : b, original = value.slice(start, end);
-    if (!original.trim()) return toast("다듬을 문장이 없어요. 먼저 내용을 적어 주세요.");
-    setRefining(mode); setDiff(null);
-    const r = await refineText(mode, original);
-    setRefining(null);
-    if (!r.ok) return toast("다듬지 못했어요: " + r.message);
-    const secName = sectionsFor(variant).find((x) => x.key === sec)?.label ?? sec;
-    setDiff({ mode, pid, sec, secName, start, end, original, text: r.data.text, changed: r.data.changed });
-  }
-  function applyDiff() {
-    if (!diff) return;
-    const now = content[diff.pid]?.[diff.sec] ?? "";
-    // 제안을 받는 사이에 글을 고쳤으면 위치가 어긋나므로 덮어쓰지 않는다
-    if (now.slice(diff.start, diff.end) !== diff.original) { setDiff(null); return toast("그사이 글이 바뀌었어요. 다시 눌러 주세요."); }
-    const lead = diff.original.match(/^\s*/)![0], trail = diff.original.match(/\s*$/)![0];
-    setSec(diff.pid, diff.sec, now.slice(0, diff.start) + lead + diff.text + trail + now.slice(diff.end));
-    setDiff(null);
-    toast("적용했어요 · 문장을 한 번 더 읽어보세요");
-  }
-  function diffCard() {
-    if (!diff || diff.pid !== cur) return null;
-    const label = REFINE_LABEL[diff.mode];
-    if (!diff.changed) return (
-      <div className="diff-card"><div className="dh"><span>{label}</span></div><div className="nochg">더 다듬을 부분이 없어요.</div>
-        <div className="modal-actions"><button className="btn sm" onClick={() => setDiff(null)}>확인</button></div></div>
-    );
-    return (
-      <div className="diff-card">
-        <div className="dh"><span>{label} · {diff.secName}</span><span className="hint">새 제안은 확인 후 적용</span></div>
-        <div>{wordDiff(diff.original.trim(), diff.text).map((p, i) => p.op === "del" ? <del key={i}>{p.s}</del> : p.op === "ins" ? <ins key={i}>{p.s}</ins> : <span key={i}>{p.s}</span>)}</div>
-        <div className="modal-actions"><button className="btn sm" onClick={() => setDiff(null)}>취소</button><button className="btn primary sm" onClick={applyDiff}>적용</button></div>
-      </div>
-    );
-  }
   const saveBadge = (
     <span className="save-state" role="status">
       {save === "saving" ? <><Icon name="refresh" /> 저장 중…</> : save === "error" ? <><Icon name="info" /> 저장 실패</> : <><Icon name="check" /> 저장됨</>}
@@ -478,7 +440,7 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
     return (
       <div className="card panel">
         <h2 style={{ fontSize: 13, marginBottom: 12 }}>문서 구성</h2>
-        <button className={"ord-item" + (isP ? " sel" : "")} onClick={() => setCur(PROFILE)}><span className="no">P</span>프로필 · 자기소개{isP && <small>현재 편집 중</small>}</button>
+        <button className={"ord-item" + (isP ? " sel" : "")} onClick={() => setCur(PROFILE)}><span className="no">P</span>표지 · 나의 소개{isP && <small>현재 편집 중</small>}</button>
         {order.map((pid, i) => (
           <button key={pid} className={"ord-item" + (pid === cur ? " sel" : "")} onClick={() => setCur(pid)}>
             <span className="no">{pad(i + 1)}</span>{sources[pid].title}{pid === cur && <small>현재 편집 중</small>}
@@ -489,39 +451,54 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
           <button className="btn" onClick={() => move(1)} disabled={isP || order.indexOf(cur) === order.length - 1}><Icon name="down" /> 아래로</button>
         </div>
         <button className="btn sm block" onClick={() => setStep(2)}>프로젝트 다시 고르기</button>
-        <div className="ord-note">1쪽 프로필 → 프로젝트별 {variant === "simple" ? "한 쪽" : "두 쪽"} → 마지막 쪽 자기소개서 순서로 만들어져요.</div>
+        <div className="ord-note">A4 가로 · {variant === "simple" ? "표지(짧은 소개) → 프로젝트 목록 → 프로젝트당 1쪽 → 성장 요약" : "표지 → 학생 소개 → 목차 → 프로젝트 사례(내용에 따라 1~4쪽) → 종합 성장 분석 → 주요 증빙자료"} 순서로 만들어져요.</div>
       </div>
     );
   }
 
+  // 표지·나의 소개·성장 정리 쪽에 들어가는 값. 라벨은 문서 구성에 맞춰 화면에서 바꿔 보여 준다 (서식 정의는 그대로)
+  const PROFILE_UI: { k: keyof ProfileDraft; label: string; guide: string; ph: string; rows?: number; limit?: number }[] = [
+    { k: "slogan", label: "표지 한 줄 소개", guide: "표지 이름 위에 들어가요. 나를 한 구절로 소개해요.", ph: "예: 관찰에서 출발해 근거로 개선하는 학생", limit: 40 },
+    { k: "education", label: "학력", guide: "표지와 나의 소개에 들어가요.", ph: "예: OO고등학교 재학 (2024.03 ~ )" },
+    { k: "skills", label: "관심 분야 · 키워드", guide: "내 기록에서 많이 나온 키워드로 채웠어요. 쉼표로 나눠요.", ph: "예: 설문 조사, 데이터 분석", limit: 120 },
+    { k: "motivation", label: "나의 소개 (관심 분야와 탐구 주제)", guide: "어떤 문제에 관심을 갖고 프로젝트를 해 왔는지 적어요. 나의 소개 쪽 첫 글이에요.", ph: "기록에서 채우기를 누르면 각 프로젝트의 시작 계기 문장을 가져와요.", rows: 6, limit: 1000 },
+    { k: "aspiration", label: "앞으로의 학습 · 진로 방향", guide: "성장과 역량 정리 쪽 마지막에 들어가요.", ph: "기록에서 채우기를 누르면 기록의 '다음에·앞으로' 문장을 가져와요.", rows: 5, limit: 1000 },
+    { k: "awards", label: "수상 · 자격 (직접 입력)", guide: "기록에 없는 항목은 비워 두세요.", ph: "한 줄에 하나씩", rows: 3, limit: 500 },
+    { k: "link", label: "포트폴리오 · SNS 링크", guide: "", ph: "예: https://…" },
+  ];
+  function fillProfile(k: "motivation" | "aspiration") {
+    const v = profileFromRecords(order.map((p) => sources[p]).filter(Boolean), content, variant)[k];
+    if (!v) return toast("기록에서 가져올 문장을 찾지 못했어요. 직접 적어 주세요.");
+    if (prof[k].trim() && !window.confirm("지금 쓴 글을 기록에서 가져온 문장으로 바꿀까요?")) return;
+    setProf(k, v);
+    toast("기록 원문 문장을 그대로 가져왔어요 · 내 말로 다듬어 주세요");
+  }
   function profileEditor() {
-    const t = TEMPLATES["portfolio-profile"];
     return (
       <div className="card panel resume">
-        <h3 className="edit-title">프로필 · 자기소개</h3>
-        <div className="edit-meta">1쪽(프로필·학력·스킬)과 마지막 쪽(자기소개서)에 들어가요 · 사람인 이력서 템플릿 디자인</div>
-        <div className="notice notice-noai" role="note"><Icon name="info" /><span>스킬은 내 기록에서 많이 나온 키워드로 채웠어요. 자기소개서는 기록만으로 쓸 수 없어 직접 작성해요 (AI 작성 미연결).</span></div>
-        {t.sections.map((sec) => {
-          const k = sec.key as keyof ProfileDraft, v = prof[k] ?? "";
-          const single = ["slogan", "skills", "education", "link"].includes(k);
+        <h3 className="edit-title">표지 · 나의 소개</h3>
+        <div className="edit-meta">표지, 나의 소개, 성장과 역량 정리 쪽에 들어가요.</div>
+        <div className="notice notice-noai" role="note"><Icon name="info" /><span>관심 키워드는 내 기록에서 많이 나온 것으로 채웠어요. 나의 소개·앞으로의 방향은 기록 원문 문장을 가져올 수 있고, 내 말로 고쳐 쓰면 돼요.</span></div>
+        {PROFILE_UI.map(({ k, label, guide, ph, rows, limit }) => {
+          const v = prof[k] ?? "";
           return (
             <div key={k} className="sec">
-              <h4>{sec.label}{sec.manual && <> <span className="badge-ai">직접 입력</span></>}{k === "skills" && <> <span className="origin-badge record">기록 키워드에서 가져옴</span></>}</h4>
-              {!sec.manual && <div className="g">{k === "skills" ? "내 기록에서 많이 나온 키워드예요. 고쳐도 돼요." : "직접 작성해요."}</div>}
+              <h4 className="sec-h">{label}
+                {k === "skills" && <span className="origin-badge record">기록 키워드에서 가져옴</span>}
+                {(k === "motivation" || k === "aspiration") && <button className="btn ghost sec-refill" onClick={() => fillProfile(k)}>기록에서 채우기</button>}
+              </h4>
+              {guide && <div className="g">{guide}</div>}
               <div className="ta">
-                {single ? (
-                  <input value={v} maxLength={sec.limit} placeholder={sec.ph ?? ""} onChange={(e) => setProf(k, e.target.value)} />
-                ) : (
+                {rows ? (
                   <>
-                    <textarea rows={4} value={v} maxLength={sec.limit} placeholder={sec.ph ?? ""} onChange={(e) => setProf(k, e.target.value)} />
-                    {sec.limit && <span className="cnt">{v.length} / {sec.limit}</span>}
+                    <textarea rows={rows} value={v} maxLength={limit} placeholder={ph} onChange={(e) => setProf(k, e.target.value)} />
+                    {limit && <span className="cnt">{v.length} / {limit}</span>}
                   </>
-                )}
+                ) : <input value={v} maxLength={limit} placeholder={ph} onChange={(e) => setProf(k, e.target.value)} />}
               </div>
             </div>
           );
         })}
-        {prompts([["portfolio-profile", order.map((p) => sources[p])]])}
       </div>
     );
   }
@@ -533,7 +510,6 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
     const common = {
       value: v,
       maxLength: MAX,
-      onFocus: () => { focusSec.current = sec.key; },
       placeholder: "짧게 직접 적어 보세요.",
       "aria-label": sec.label,
     };
@@ -541,7 +517,7 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
       <div key={sec.key} className={"sec" + (v.trim() ? "" : " need")}>
         <h4 className="sec-h">
           {sec.no ? <span className="sec-no">{sec.no}</span> : <span className="sec-no sub" aria-hidden="true">·</span>}{sec.label}
-          {origin ? <span className={"origin-badge " + origin} title={ORIGIN_HINT[origin]}>{ORIGIN_LABEL[origin]}</span>
+          {origin ? <span className={"origin-badge " + originClass(origin)} title={ORIGIN_HINT[origin]}>{ORIGIN_LABEL[origin]}</span>
             : v.trim() ? <span className="origin-badge saved" title="이전에 저장한 글이에요.">저장된 글</span>
             : <span className="origin-badge need">추가 확인 필요</span>}
           <button className="btn ghost sec-refill" onClick={() => refillSec(pid, sec)} title="개요·기록 원문에서 이 항목을 다시 채워요">기록에서 다시 채우기</button>
@@ -549,8 +525,8 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
         <div className="g">{sec.guide}</div>
         <div className="ta">
           {sec.single
-            ? <input {...common} ref={(el) => { areas.current[sec.key] = el; }} onChange={(e) => setSec(pid, sec.key, e.target.value)} />
-            : <textarea {...common} rows={sec.rows} ref={(el) => { areas.current[sec.key] = el; }} onChange={(e) => setSec(pid, sec.key, e.target.value)} />}
+            ? <input {...common} onChange={(e) => setSec(pid, sec.key, e.target.value)} />
+            : <textarea {...common} rows={sec.rows} onChange={(e) => setSec(pid, sec.key, e.target.value)} />}
           <span className={"cnt" + (over ? " soft-over" : "")}>{v.length} / 권장 {sec.soft}자</span>
         </div>
         {!v.trim() && (
@@ -618,7 +594,7 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
         <div><h1 className="title">프로젝트 포트폴리오</h1><p className="subtitle">RE:Cord가 채운 초안을 읽고, 내 말로 고친 뒤 미리보기로 확인하세요.</p></div>
         <div className="head-tools">
           <Segmented label="포트폴리오 분량" value={variant} onChange={setVariant}
-            options={[{ value: "simple", label: "간단형 · 1쪽" }, { value: "detailed", label: "상세형 · 2쪽" }]} />
+            options={[{ value: "simple", label: "간단형" }, { value: "detailed", label: "상세형" }]} />
           {saveBadge}
           <button className="btn primary" onClick={() => setPreview(true)}><Icon name="eye" /> 미리보기</button>
         </div>
@@ -632,8 +608,24 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
             {orderList()}
             {profileEditor()}
             <div className="col-right"><div className="card panel">
-              <div className="right-title" style={{ color: "var(--text)" }}><Icon name="info" /> 레퍼런스 구조</div>
-              <p className="hint" style={{ margin: "6px 0 0", lineHeight: 1.6 }}>사람인 템플릿 1쪽: 왼쪽 프로필(인사말·연락처), 오른쪽 학력·수상/자격증·스킬·주요 프로젝트.<br />마지막 쪽: 왼쪽 슬로건, 오른쪽 지원동기·앞으로의 포부.<br />연락처·주소는 인쇄 후 직접 적어요.</p>
+              <div className="right-title" style={{ color: "var(--text)" }}><Icon name="info" /> 문서 구성 (A4 가로 · {VARIANT_INFO[variant].label})</div>
+              {variant === "simple" ? (
+                <ol className="hint" style={{ margin: "6px 0 0", paddingLeft: 18, lineHeight: 1.8 }}>
+                  <li>표지 — 한 줄 소개 · 이름 · 짧은 소개(나의 소개 앞 두 문장) · 관심 분야</li>
+                  <li>프로젝트 목록 — 한 줄 소개 · 역할 · 쪽</li>
+                  <li>프로젝트당 1쪽 — 개요·역할·과정 | 대표 결과물·성과·배운 점</li>
+                  <li>성장 요약 — 반복된 키워드 · 배운 점</li>
+                </ol>
+              ) : (
+                <ol className="hint" style={{ margin: "6px 0 0", paddingLeft: 18, lineHeight: 1.8 }}>
+                  <li>표지 — 한 줄 소개 · 이름 · 관심 분야 · 대표 이미지</li>
+                  <li>학생 소개 — 나의 소개 · 탐구 주제 · 대표 역량</li>
+                  <li>프로젝트 목차 — 기간 · 분야 · 나의 역할 · 쪽</li>
+                  <li>프로젝트 사례 — OVERVIEW / RESEARCH &amp; PROCESS / OUTCOME &amp; REFLECTION</li>
+                  <li>종합 성장 분석 — 키워드 · 성찰 · 앞으로의 방향</li>
+                  <li>주요 증빙자료 — 사진 · 문서 · 링크</li>
+                </ol>
+              )}
             </div></div>
           </div>
         </>
@@ -655,9 +647,13 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
               <Icon name="sparkle" />
               <div>
                 <b>기존 프로젝트 기록을 바탕으로 초안을 준비했어요. 내용을 확인하고 자유롭게 수정해 보세요.</b>
-                <span>항목마다 글의 출처를 표시해요 — <i className="origin-badge ai">AI 초안</i> 기록 문장 근거 확인 · <i className="origin-badge overview">개요에서 옮김</i> · <i className="origin-badge record">기록에서 발췌</i> 원문 그대로 · <i className="origin-badge edited">직접 수정함</i> 다시 채워도 유지</span>
               </div>
             </div>
+            {legacy.has(cur) && (
+              <div className="need-box" style={{ marginBottom: 8 }}>
+                <span><b>예전에 만든 초안이에요.</b> 지금 구성(상세형 목표·의사결정, 간단형 배운 점 등)으로 기록을 더 활용하려면 <b>초안 다시 만들기</b>를 눌러 주세요. 직접 고친 항목은 그대로 둬요.</span>
+              </div>
+            )}
             <div className="draft-tools">
               <span className={"len-meter" + (len > info.target ? " over" : "")}>
                 지금 약 {len.toLocaleString()}자 · {info.pages} 권장 {info.target.toLocaleString()}자 안팎{empty ? ` · 추가 확인 필요 ${empty}개` : ""}
@@ -682,21 +678,13 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
             {prompts([["portfolio-project", [s]]], true)}
           </div>
           <div className="col-right"><div className="card panel">
-            <div className="right-title" style={{ color: "var(--text)" }}><Icon name="rewrite" /> 문장 다듬기 <span className="badge-ai">AI</span></div>
-            <div className="sub" style={{ fontSize: 11, margin: "3px 0 12px" }}>문장을 선택하고 눌러보세요. 선택하지 않으면 마지막으로 누른 항목 전체를 다듬어요.</div>
-            {([["concise", "scissors", "더 간결하게"], ["role", "user", "내 역할 중심으로"], ["rewrite", "rewrite", "선택 부분 다시 쓰기"]] as const).map(([mode, ic, label]) => (
-              <button key={mode} className="ai-btn" disabled={!!refining} onMouseDown={(e) => e.preventDefault()} onClick={() => refine(mode)}>
-                {refining === mode ? <span className="spinner" /> : <Icon name={ic} />}{label}<Icon name="chevR" />
-              </button>
-            ))}
-            {diffCard()}
             {variant === "simple" && (
               <>
-                <h2 style={{ margin: "16px 0 4px", fontSize: 13 }}>증빙자료</h2>
+                <h2 style={{ margin: "0 0 4px", fontSize: 13 }}>핵심 증빙자료</h2>
                 {evidencePicker(cur, true)}
               </>
             )}
-            <h2 style={{ margin: "16px 0 4px", fontSize: 13 }}>참고할 기록</h2>
+            <h2 style={{ margin: variant === "simple" ? "16px 0 4px" : "0 0 4px", fontSize: 13 }}>참고할 기록</h2>
             {s.records.length ? s.records.slice(0, 8).map((r) => (
               <button key={r.id} className="ref-row" onClick={() => setViewRecord({ title: r.title, text: r.text })}>
                 <span className="ico"><Icon name="file" /></span>{r.title}<Icon name="chevR" />
@@ -769,13 +757,25 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
   }
 
   // ───── 미리보기 · 인쇄
-  function printNow() {
-    document.body.classList.add("printing");
-    const done = () => { document.body.classList.remove("printing"); window.removeEventListener("afterprint", done); };
-    window.addEventListener("afterprint", done);
-    window.print();
+  // PDF 저장: 미리보기와 같은 문서를 .app 밖(#rc-print)에 같은 상태로 그려 둔 것을 인쇄한다 (D010).
+  // 지금 화면의 편집 상태를 그대로 쓰므로 저장 전이라도 최신 글이 나간다. 저장도 바로 요청해 둔다.
+  async function printNow() {
+    if (printing) return;
+    setPrinting(true);
+    void flush();
+    try {
+      await waitForPrintAssets();
+      document.body.classList.add("rc-printing");
+      const done = () => { document.body.classList.remove("rc-printing"); window.removeEventListener("afterprint", done); };
+      window.addEventListener("afterprint", done);
+      window.print();
+    } finally {
+      setPrinting(false);
+    }
   }
-  const landscape = tpl.type !== "altform";
+  const isAlt = tpl.type === "altform";
+  const docProps = { name: userName, profile: prof, order, sources, files: filesOf, content, variant };
+  const missing = isAlt ? [] : emptyItems(docProps);
 
   const L = ["유형 선택", "경험 선택", "초안 편집"];
   const canGo = (k: number) => k < 3 || (built && order.length > 0);
@@ -806,18 +806,27 @@ export function PortfolioWizard({ projects, initial, initialStep, initialType, u
       {progressOverlay()}
 
       {preview && (
-        <Modal title={tpl.type === "altform" ? "미리보기" : `미리보기 · ${VARIANT_INFO[variant].label}`} wide onClose={() => setPreview(false)}>
-          <style>{`@page{size:A4 ${landscape ? "landscape" : "portrait"};margin:10mm} .overlay .modal.wide{width:${landscape ? "min(1180px,100%)" : "min(900px,100%)"}}`}</style>
-          {tpl.type === "altform"
-            ? <AltSheet alt={alt} name={userName} edit={false} />
-            : <PortfolioSheet name={userName} profile={prof} order={order} sources={sources} files={filesOf} content={content} variant={variant} />}
-          <p className="no-print" style={{ fontSize: 11, color: "#555", margin: "10px 0" }}>※ {tpl.type === "altform" ? "대체서식은 참고용입니다. 제출 전 해당 대학의 공식 서식·유의사항을 직접 확인하세요." : "기록으로 채운 초안을 내가 고친 내용이에요. 기록과 다른 곳이 없는지 제출 전 한 번 더 읽어 보세요. ‘추가 확인 필요’ 칸은 인쇄 전에 채우거나 지워 주세요."}</p>
-          <div className="modal-actions no-print">
-            <button className="btn" onClick={() => setPreview(false)}>닫기</button>
-            <button className="btn primary" onClick={printNow}><Icon name="printer" /> 인쇄 / PDF 저장</button>
+        <Modal title={isAlt ? "미리보기" : `미리보기 · ${VARIANT_INFO[variant].label} · A4 가로${pageTotal ? ` · ${pageTotal}쪽` : ""}`} wide onClose={() => setPreview(false)}>
+          {/* 버튼은 맨 위에 두고, 창 안에서 스크롤해도 따라 보이게 (sticky) */}
+          <div className="preview-bar no-print">
+            <p>{isAlt ? "대체서식은 참고용입니다. 제출 전 해당 대학의 공식 서식·유의사항을 직접 확인하세요." : "기록과 다른 곳이 없는지 한 번 더 읽어 보세요."} 인쇄 창에서 대상을 ‘PDF로 저장’으로 고르면 파일로 저장돼요.</p>
+            <div className="preview-actions">
+              <button className="btn" onClick={() => setPreview(false)}>닫기</button>
+              <button className="btn primary" disabled={printing} onClick={printNow}>{printing ? <><span className="spinner" />이미지·글꼴 준비 중…</> : <><Icon name="printer" /> PDF로 저장 / 인쇄</>}</button>
+            </div>
           </div>
+          {!isAlt && missing.length > 0 && (
+            <div className="print-check no-print" role="note">
+              <b><Icon name="info" /> 인쇄 전 확인 · 비어 있어 문서에서 빠진 항목 {missing.length}곳</b>
+              <ul>{missing.slice(0, 6).map((m) => <li key={m}>{m}</li>)}</ul>
+              {missing.length > 6 && <small>외 {missing.length - 6}곳</small>}
+            </div>
+          )}
+          {isAlt ? <div className="doc-scroll"><AltSheet alt={alt} name={userName} edit={false} /></div>
+            : <LandscapeDocument {...docProps} onPages={setPageTotal} />}
         </Modal>
       )}
+      {preview && isAlt && <PrintPortal page="altform"><AltSheet alt={alt} name={userName} edit={false} /></PrintPortal>}
       {viewRecord && (
         <Modal title={viewRecord.title} onClose={() => setViewRecord(null)}>
           {viewRecord.text ? <div className="note-body">{viewRecord.text}</div> : <div className="empty-note">미리볼 본문이 없는 자료예요.</div>}

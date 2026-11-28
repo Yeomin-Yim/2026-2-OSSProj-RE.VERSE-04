@@ -9,7 +9,7 @@ export default async function ForgotPage({ searchParams }: { searchParams: Promi
     <div className="login-wrap">
       <form action={requestPasswordReset} className="card login-card">
         <div className="logo">
-          <span className="logo-row"><Logo />RE:Cord</span>
+          <span className="logo-row"><Logo height={44} /></span>
           <small>비밀번호 찾기</small>
         </div>
         {sent ? (

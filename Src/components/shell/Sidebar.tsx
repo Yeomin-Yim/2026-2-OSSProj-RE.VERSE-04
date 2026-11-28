@@ -16,8 +16,8 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <Link className="logo" href="/projects">
-        <span className="logo-row"><Logo />RE:Cord</span>
+      <Link className="logo" href="/projects" aria-label="RE:Cord 홈 (프로젝트 관리)">
+        <span className="logo-row"><Logo height={32} /></span>
       </Link>
       <nav className="nav">
         {NAV.map((item) => (

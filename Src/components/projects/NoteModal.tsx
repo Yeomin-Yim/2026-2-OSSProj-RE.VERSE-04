@@ -5,7 +5,7 @@ import { editRecord, openFile } from "@/app/(app)/projects/actions";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
 import { useAction, useToast } from "@/components/ui/Toast";
-import { kindLabel, ymd } from "./format";
+import { excerpt, kindLabel, ymd } from "./format";
 import type { RecordView } from "./types";
 
 interface Props {
@@ -101,8 +101,18 @@ export function NoteModal({ record, onClose, onMove }: Props) {
         </div>
       )}
 
+      {/* 내용 미리보기: 원문 앞부분 (서버 요약이 없어 발췌 · "요약"이라 부르지 않음, D007) */}
+      {record.raw_text.trim().length > 160 && (
+        <div className="nv-preview">
+          <b>내용 미리보기</b>
+          <p>{excerpt(record, 160).text}</p>
+        </div>
+      )}
       {record.raw_text ? (
-        <div className="note-body">{record.raw_text}</div>
+        <>
+          {record.raw_text.trim().length > 160 && <h4 className="nv-sub">전체 내용</h4>}
+          <div className="note-body">{record.raw_text}</div>
+        </>
       ) : (
         !isPhoto && (
           <div className="empty-note">
