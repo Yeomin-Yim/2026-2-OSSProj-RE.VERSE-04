@@ -17,6 +17,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Notice } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
 import { ScrapButton, TodoList, useStudent } from "@/components/student/StudentData";
+import { postingScrapInput } from "@/components/scraps/posting";
 import type { GraphProject } from "@/components/graph/GraphView";
 import type { ExNode, ExploreData } from "@/lib/server/explore/explore";
 import { LENS_LABEL, type LensKey } from "@/lib/core/recommend/lenses";
@@ -45,7 +46,6 @@ type View = { k: number; x: number; y: number };
 
 const ACCENT = "#2C6CCB";
 const COLORS: Record<string, string> = { root: "#1B2A4A", recommend: "#2C6CCB", target: "#80A5DE", posting: "#B7CCEC", info: "#FFFFFF", project: "#FADC67", note: ACCENT };
-const LOADING_STEPS = ["프로젝트 기록 읽는 중", "관심 키워드 묶는 중", "학교·직무와 연결하는 중"];
 const STATUS_TEXT: Record<string, (kind: string) => string> = {
   "no-profiles": (k) => `${k} 점수표(DB)가 아직 비어 있어요. 점수표를 수집하면 내 기록의 태그로 추천을 계산해 보여 드려요.`,
   "no-records": () => "태그가 붙은 기록이 아직 없어요. 프로젝트 관리에서 기록을 남기면 추천을 계산할 수 있어요.",
@@ -81,7 +81,6 @@ export function ExploreGraph({ data: raw, projects, notes: initialNotes, place, 
   const [dock, setDock] = useState<Dock>(() => (open?.note ? { type: "note", id: open.note } : open?.project ? { type: "project", id: open.project } : null));
   const [notes, setNotes] = useState(initialNotes);
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(0);
   const [revealing, setRevealing] = useState(false);
   const [gen, setGen] = useState(0);
   const [hover, setHover] = useState<string | null>(null);
@@ -161,12 +160,6 @@ export function ExploreGraph({ data: raw, projects, notes: initialNotes, place, 
   useEffect(() => { fit(layout.nodes); }, [placeKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const t = setTimeout(() => setInstant(false), 50); return () => clearTimeout(t); }, []);
 
-  // ───── 로딩 화면의 단계 문구
-  useEffect(() => {
-    if (!loading) return;
-    const t = setInterval(() => setStep((s) => (s + 1) % LOADING_STEPS.length), 520);
-    return () => clearInterval(t);
-  }, [loading]);
 
   // ───── 탐색 위치 저장 (profiles.ui_state). 시연 모드는 저장하지 않는다
   const lastPlace = useRef(JSON.stringify({ mode, path, sel })); // 처음 들어온 위치는 다시 저장하지 않는다
@@ -208,7 +201,7 @@ export function ExploreGraph({ data: raw, projects, notes: initialNotes, place, 
   // ───── 동작
   function generate(ms: number) {
     setDock(null); setSel(null);
-    setLoading(true); setStep(0);
+    setLoading(true);
     setTimeout(() => {
       revealAll.current = true;
       setLoading(false);
@@ -476,9 +469,9 @@ export function ExploreGraph({ data: raw, projects, notes: initialNotes, place, 
           <div className={"loading" + (loading ? "" : " hidden")} aria-live="polite">
             <div>
               <div className="orbit"><i /><i /><i /></div>
-              <h2>{demo ? "예시 데이터로 연결을 그리고 있어요…" : "내 프로젝트 기록으로 연결을 그리고 있어요…"}</h2>
-              <p>{LOADING_STEPS[step]}…</p>
-              <div className="steps">{LOADING_STEPS.map((t, i) => <span key={t} className={i === step ? "on" : ""}>{t}</span>)}</div>
+              <h2>{demo ? "예시 데이터로 연결을 그리고 있어요." : "연결된 경험을 정리하고 있어요."}</h2>
+              {/* 데이터는 이미 불러온 상태라, 하지 않는 일을 단계처럼 돌려 보여 주지 않는다 (D008) */}
+              <p>{mode === "career" ? "내 프로젝트 기록과 이어진 직무·채용공고를 그래프로 펼쳐요." : "내 프로젝트 기록과 이어진 학과·대학을 그래프로 펼쳐요."}</p>
             </div>
           </div>
 
@@ -613,7 +606,8 @@ function ExplorePanel({ node, current, data, mode, path, projects, noteCount, on
         <h2>{o.company}</h2>
         <PostingBadges o={o} />
         <p className="desc">{o.title}</p>
-        {demo && <div className="panel-scrap"><button className="scrap-btn" disabled title="시연 모드에서는 스크랩할 수 없어요"><Icon name="star" /></button><span>시연 모드에서는 스크랩을 저장하지 않아요</span></div>}
+        {demo ? <div className="panel-scrap"><button className="scrap-btn" disabled title="시연 모드에서는 스크랩할 수 없어요"><Icon name="star" /></button><span>시연 모드에서는 스크랩을 저장하지 않아요</span></div>
+          : <PostingScrap node={node} jobLabel={data.career.children.find((j) => j.id === node.parentId)?.label} />}
         <PostingBody o={o} url={demo ? null : node.url ?? null} />
         {!demo && <button className="btn ghost pt-all" onClick={() => onPostings(node.parentId!, node.id)}>이 직무 공고 모두 보기</button>}
         <TodoList todoKey={"posting:" + node.id} defaults={o.checklist ?? CHECKLIST.posting} title="지원 체크리스트" />
@@ -766,6 +760,20 @@ function NotePanel({ note, projects, onProject }: { note: GraphNote; projects: G
 
 // ───────── 채용공고 목록 (시연 모드에서만 데이터가 있다) ─────────
 
+/** 채용공고 ★ (D016): 스크랩 화면의 '채용공고' 탭으로 모인다 */
+function PostingScrap({ node, jobLabel }: { node: ExNode; jobLabel?: string }) {
+  const { isScrapped, readOnly } = useStudent();
+  const input = postingScrapInput(node, jobLabel);
+  if (!input) return null;
+  const on = isScrapped(input.type, input.ref_id);
+  return (
+    <div className="panel-scrap">
+      <ScrapButton input={input} />
+      <span>{readOnly ? "시연 모드에서는 저장하지 않아요" : on ? "스크랩했어요 · 스크랩 > 채용공고에서 볼 수 있어요" : "공고 스크랩"}</span>
+    </div>
+  );
+}
+
 function Postings({ data, jobId, hi, onClose }: { data: ExploreData; jobId: string; hi: string | null; onClose: () => void }) {
   const job = data.career.children.find((j) => j.id === jobId);
   const list = data.career.next[jobId] ?? [];
@@ -789,6 +797,7 @@ function Postings({ data, jobId, hi, onClose }: { data: ExploreData; jobId: stri
                 </span>
                 <PostingBadges o={n.posting} compact />
                 <span className="mt">{n.posting.location}{n.posting.start ? ` · ${n.posting.start.slice(5).replace("-", "/")} 등록` : ` · 마감 ${n.posting.deadline}`}</span>
+                {!data.demo && (() => { const input = postingScrapInput(n, job.label); return input && <ScrapButton input={input} className="pt-scrap" />; })()}
               </summary>
               <div className="pb">
                 <PostingBody o={n.posting} url={data.demo ? null : n.url ?? null} />

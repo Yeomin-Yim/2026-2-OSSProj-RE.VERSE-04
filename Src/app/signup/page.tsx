@@ -9,7 +9,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
     <div className="login-wrap">
       <form action={signup} className="card login-card">
         <div className="logo">
-          <span className="logo-row"><Logo />RE:Cord</span>
+          <span className="logo-row"><Logo height={44} /></span>
           <small>회원가입</small>
         </div>
         <div className="field">

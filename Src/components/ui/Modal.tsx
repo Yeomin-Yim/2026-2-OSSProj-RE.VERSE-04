@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   title?: string;
@@ -9,11 +10,17 @@ interface Props {
   children: React.ReactNode;
 }
 
-/** 프로토타입의 모달. 바깥을 누르거나 Esc 를 누르면 닫힌다. */
+/**
+ * 프로토타입의 모달. 바깥을 누르거나 Esc 를 누르면 닫힌다.
+ * body 바로 아래에 그린다(포털): 부모에 transform·애니메이션이 있으면 position:fixed 가 화면이 아니라 그 부모 기준이 되어
+ * 팝업이 지금 보고 있는 화면 가운데가 아닌 위·아래에 뜨기 때문.
+ */
 export function Modal({ title, wide, onClose, children }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const pressedOutside = useRef(false);
   const titleId = useId();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   // onClose 가 렌더링마다 새로 만들어져도 리스너를 다시 달지 않도록 최신 값을 ref 로 들고 있는다
   const close = useRef(onClose);
   useEffect(() => {
@@ -22,6 +29,7 @@ export function Modal({ title, wide, onClose, children }: Props) {
 
   // 처음 열릴 때만 첫 입력칸에 포커스 (입력 중에 포커스가 튀지 않도록)
   useEffect(() => {
+    if (!mounted) return;
     const first = box.current?.querySelector<HTMLElement>("input:not([type=file]):not([type=checkbox]):not([type=radio]),textarea,select");
     (first ?? box.current)?.focus();
     const onKey = (e: KeyboardEvent) => {
@@ -32,9 +40,10 @@ export function Modal({ title, wide, onClose, children }: Props) {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [mounted]);
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <div
       className="overlay"
       onMouseDown={(e) => (pressedOutside.current = e.target === e.currentTarget)}
@@ -58,6 +67,7 @@ export function Modal({ title, wide, onClose, children }: Props) {
         )}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

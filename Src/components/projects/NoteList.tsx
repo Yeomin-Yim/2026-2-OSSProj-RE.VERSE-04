@@ -14,13 +14,14 @@ interface Props {
   records: RecordView[];
   empty: string;
   userName: string;
-  tagInfo: TagInfo;
+  /** 예전 호출과 맞추려고 남겨 둔 값. 자료 화면에서는 태그를 보여 주지 않는다 (D007) */
+  tagInfo?: TagInfo;
   /** 옮길 수 있는 내 프로젝트 목록. 없으면 '옮기기' 메뉴를 숨긴다 */
   projects?: ProjectRow[];
 }
 
-/** 자료 목록. 한 줄마다 ⋮ 메뉴(내용 보기 · 결과물 표시 · 다른 프로젝트로 옮기기 · 삭제)가 있다. */
-export function NoteList({ records, empty, userName, tagInfo, projects }: Props) {
+/** 자료 목록: 제목 · 유형 · 날짜 (내용 미리보기는 자료를 눌러 연 창에서). 한 줄마다 ⋮ 메뉴(내용 보기 · 결과물 표시 · 다른 프로젝트로 옮기기 · 삭제)가 있다. */
+export function NoteList({ records, empty, userName, projects }: Props) {
   const { pending, run } = useAction();
   const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
@@ -58,7 +59,8 @@ export function NoteList({ records, empty, userName, tagInfo, projects }: Props)
 
   return (
     <div style={{ marginTop: 12 }}>
-      {records.map((r) => (
+      {records.map((r) => {
+        return (
         <div className="note" key={r.id}>
           <div className="ico"><Icon name={kindIcon(r.kind)} /></div>
           <button type="button" className="nm note-open" onClick={() => setViewId(r.id)} aria-label={`${r.title} 내용 보기`}>
@@ -73,7 +75,8 @@ export function NoteList({ records, empty, userName, tagInfo, projects }: Props)
             <Icon name="more" />
           </button>
         </div>
-      ))}
+        );
+      })}
 
       {menu && menuRecord && (
         <div className="menu" role="menu" style={{ position: "fixed", zIndex: 120, top: menu.top, left: menu.left, right: "auto" }}>
@@ -91,7 +94,6 @@ export function NoteList({ records, empty, userName, tagInfo, projects }: Props)
       {viewing && (
         <NoteModal
           record={viewing}
-          tagInfo={tagInfo}
           onClose={() => setViewId(null)}
           onMove={canMove ? () => setMoveId(viewing.id) : undefined}
         />

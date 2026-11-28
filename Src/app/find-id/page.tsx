@@ -10,7 +10,7 @@ export default async function FindIdPage({ searchParams }: { searchParams: Promi
     <div className="login-wrap">
       <form action={findLoginId} className="card login-card">
         <div className="logo">
-          <span className="logo-row"><Logo />RE:Cord</span>
+          <span className="logo-row"><Logo height={44} /></span>
           <small>아이디(이메일) 찾기</small>
         </div>
         <div className="field">

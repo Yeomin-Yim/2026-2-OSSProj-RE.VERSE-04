@@ -45,15 +45,21 @@ export function Icon({ name }: { name: IconName }) {
 }
 
 /** 임시 로고 (프로토타입과 같은 모노그램) */
-export function Logo() {
+/**
+ * RE:Cord 확정 로고 (D014). 첨부된 최종 로고 이미지에서 잘라낸 에셋을 그대로 쓴다 (다시 그리지 않음).
+ *   full   : 심벌 + RE:Cord 워드마크 (가로형) — 로그인·가입·사이드바
+ *   symbol : 심벌만 — 좁은 자리
+ * 원본 높이 323px 라 고해상도 화면에서도 선명하다. 높이만 정하면 비율은 유지된다.
+ */
+const LOGO = {
+  full: { src: "/brand/logo-horizontal.png", w: 1501, h: 323 },
+  symbol: { src: "/brand/logo-symbol.png", w: 433, h: 323 },
+} as const;
+
+export function Logo({ variant = "full", height = 30, className }: { variant?: keyof typeof LOGO; height?: number; className?: string }) {
+  const l = LOGO[variant];
   return (
-    <svg viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="3" y="3" width="26" height="26" rx="7" fill="#2C6CCB" />
-      <circle cx="24.5" cy="8.5" r="3.2" fill="#F5E385" />
-      <path
-        d="M12 10v12M12 10h5a3.5 3.5 0 0 1 0 7h-5M16.5 17l4.5 5"
-        stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"
-      />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element -- 작은 정적 PNG, 크기를 지정해 레이아웃 흔들림 없음
+    <img className={"brand-logo " + variant + (className ? " " + className : "")} src={l.src} alt="RE:Cord" width={Math.round((height * l.w) / l.h)} height={height} decoding="async" />
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 // 스크랩 (프로토타입 #/scraps) — scraps · todos 표에 저장된 것만 보여 준다.
-// 채용공고 스크랩: 사람인 공고(SARAMIN_ACCESS_KEY 가 있을 때)의 ★로 모인다. 키가 없으면 그래프에서 검색 링크만 보인다.
+// 채용공고 스크랩: 연결 그래프 → 취업 → 직무의 공고 패널·공고 목록 ★로 모인다 (D016: type "job" + ref_id "posting:<id>" 로 저장).
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -11,13 +11,14 @@ import { Icon, type IconName } from "@/components/ui/Icon";
 import { Notice } from "@/components/ui/Notice";
 import { ScrapButton, TodoList, useStudent } from "@/components/student/StudentData";
 import type { Scrap, ScrapType } from "@/lib/server/student/scraps";
+import { isClosed, isPostingScrap, postingMeta, postingTodoKey } from "./posting";
 
 type Tab = "all" | "university" | "major" | "job" | "posting" | "node";
 const TABS: [Tab, string][] = [["all", "전체"], ["university", "대학"], ["major", "학과"], ["job", "직무"], ["posting", "채용공고"], ["node", "노드 노트"]];
 const KIND: Record<ScrapType, [string, IconName]> = {
   university: ["대학", "graph"], major: ["학과", "graph"], job: ["직무", "graph"], note: ["노드 노트", "pen"], project: ["프로젝트", "home"],
 };
-const tabOf = (s: Scrap): Tab => (s.type === "note" || s.type === "project" ? "node" : s.type);
+const tabOf = (s: Scrap): Tab => (isPostingScrap(s) ? "posting" : s.type === "note" || s.type === "project" ? "node" : s.type);
 
 /** 원래 위치: 스크랩할 때의 그래프 탐색 위치 */
 function placeHref(s: Scrap) {
@@ -54,7 +55,34 @@ function Memo({ scrap }: { scrap: Scrap }) {
   );
 }
 
+/** 채용공고 스크랩 카드: 회사·제목·지역·마감(지났으면 표시)·원문 링크·지원 체크리스트(그래프와 같은 목록) */
+function PostingCard({ s }: { s: Scrap }) {
+  const { removeScrap } = useStudent();
+  const m = postingMeta(s);
+  const closed = isClosed(m.deadline);
+  return (
+    <div className={"card sc-card posting-scrap" + (closed ? " closed" : "")}>
+      <div className="kind"><Icon name="file" />채용공고{m.source === "public" ? " · 공공기관" : m.source === "saramin" ? " · 사람인" : ""}<ScrapButton input={{ type: s.type, ref_id: s.ref_id, title: s.title, meta: s.meta, loc: s.loc }} /></div>
+      <div className="ps-co">{m.company}</div>
+      <h3>{s.title}</h3>
+      <div className="meta">
+        {[m.location, m.jobLabel ? `직무 · ${m.jobLabel}` : "", `스크랩 ${noteDate(s.created_at)}`].filter(Boolean).join(" · ")}
+      </div>
+      {m.deadline && <div className={"ps-deadline" + (closed ? " closed" : "")}>{closed ? "마감됨 · " : "마감 "}{m.deadline}</div>}
+      <Notice type="job" />
+      <Memo scrap={s} />
+      <div className="acts">
+        {m.url && <a className="btn sm primary" href={m.url} target="_blank" rel="noopener noreferrer"><Icon name="link" /> 공고 원문 보기</a>}
+        <Link className="btn sm" href={placeHref(s)}><Icon name="graph" /> 그래프에서 보기</Link>
+        <button className="btn sm" onClick={() => removeScrap(s.id)}>스크랩 해제</button>
+      </div>
+      <TodoList todoKey={postingTodoKey(s)} defaults={CHECKLIST.posting} title="지원 체크리스트" />
+    </div>
+  );
+}
+
 function Card({ s }: { s: Scrap }) {
+  if (isPostingScrap(s)) return <PostingCard s={s} />;
   const { removeScrap } = useStudent();
   const [label, icon] = KIND[s.type];
   const todoKey = s.type === "note" || s.type === "project" ? null : `${s.type}:${s.ref_id}`;
@@ -86,7 +114,7 @@ export function ScrapsView() {
       <div className="page-head">
         <div>
           <h1 className="title">스크랩</h1>
-          <p className="subtitle">다시 보고 싶은 대학·학과·직무와 노드 노트를 모아 둬요.</p>
+          <p className="subtitle">다시 보고 싶은 대학·학과·직무·채용공고와 노드 노트를 모아 둬요.</p>
         </div>
         <span className="sample-badge">{scraps.length}개</span>
       </div>
@@ -100,7 +128,7 @@ export function ScrapsView() {
       ) : (
         <div className="sc-empty">
           {tab === "posting"
-            ? <>스크랩한 공고가 없어요.<br />연결 그래프에서 직무를 고르면 공고를 찾아보고 ★로 모을 수 있어요.</>
+            ? <>스크랩한 공고가 없어요.<br />연결 그래프 → 취업에서 직무를 고르고, 공고 옆의 ★을 누르면 여기에 모여요.</>
             : scraps.length ? "이 종류의 스크랩이 아직 없어요."
             : <>아직 스크랩이 없어요.<br />연결 그래프에서 학과·대학·직무, 프로젝트, 노트 옆의 ★을 누르면 여기에 모여요.</>}
           <br /><Link href="/graph" className="btn sm" style={{ marginTop: 14 }}>연결 그래프로 가기</Link>

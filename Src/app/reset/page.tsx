@@ -9,7 +9,7 @@ export default async function ResetPage({ searchParams }: { searchParams: Promis
     <div className="login-wrap">
       <form action={resetPassword} className="card login-card">
         <div className="logo">
-          <span className="logo-row"><Logo />RE:Cord</span>
+          <span className="logo-row"><Logo height={44} /></span>
           <small>새 비밀번호 정하기</small>
         </div>
         <div className="field">

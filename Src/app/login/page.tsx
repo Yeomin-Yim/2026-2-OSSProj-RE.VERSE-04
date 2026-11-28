@@ -9,7 +9,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <div className="login-wrap">
       <form action={login} className="card login-card">
         <div className="logo">
-          <span className="logo-row"><Logo />RE:Cord</span>
+          <span className="logo-row"><Logo height={54} /></span>
           <small>오늘의 경험을, 내일의 가능성으로</small>
         </div>
         <div className="field">
